@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { processBatchQueries } from './src/lib/batch.mjs';
 import { routeCliInput, renderHelpMenu } from './src/lib/cli.mjs';
@@ -9,13 +10,14 @@ import { processQueuedSearches } from './src/lib/pipeline.mjs';
 import { runSearchAndPersist } from './src/lib/search-runner.mjs';
 import { readSearchHistory } from './src/lib/tracker.mjs';
 
-async function main() {
-  const routed = routeCliInput(process.argv.slice(2));
+export async function main(argv = process.argv.slice(2), io = {}) {
+  const { stdout = console.log } = io;
+  const routed = routeCliInput(argv);
   const projectRoot = resolve(routed.flags.projectRoot || process.cwd());
 
   if (routed.mode === 'help' || !routed.query && routed.mode === 'search') {
-    console.log(renderHelpMenu());
-    return;
+    stdout(renderHelpMenu());
+    return { mode: 'help' };
   }
 
   const config = readSourcesConfig(projectRoot);
@@ -39,8 +41,9 @@ async function main() {
         projectRoot,
         fixtureDir,
       });
-      console.log(`Saved markdown report: ${result.artifacts.markdownReport}`);
-      console.log(`Saved JSON export: ${result.artifacts.jsonExport}`);
+      stdout(`Saved markdown report: ${result.artifacts.markdownReport}`);
+      stdout(`Saved JSON export: ${result.artifacts.jsonExport}`);
+      return result;
       break;
     }
     case 'pipeline': {
@@ -49,27 +52,31 @@ async function main() {
         projectRoot,
         fixtureDir,
       });
-      console.log(`Processed ${results.length} queued search(es).`);
+      stdout(`Processed ${results.length} queued search(es).`);
+      return results;
       break;
     }
     case 'tracker':
-      console.log(readSearchHistory(projectRoot));
-      break;
+      stdout(readSearchHistory(projectRoot));
+      return readSearchHistory(projectRoot);
     case 'batch': {
       const results = await processBatchQueries({
         config,
         projectRoot,
         fixtureDir,
       });
-      console.log(`Processed ${results.length} batch search(es).`);
-      break;
+      stdout(`Processed ${results.length} batch search(es).`);
+      return results;
     }
     default:
-      console.log(renderHelpMenu());
+      stdout(renderHelpMenu());
+      return { mode: 'help' };
   }
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
-});
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  });
+}

@@ -2,19 +2,32 @@
   "name": "paper-ops",
   "version": "0.1.0",
   "description": "Academic paper search router and workflow skill for Codex.",
+  "homepage": "https://github.com/JoaopauloRM700/paper-ops",
+  "repository": "https://github.com/JoaopauloRM700/paper-ops",
+  "license": "MIT",
+  "keywords": [
+    "paper-ops",
+    "codex",
+    "gemini-cli",
+    "academic-search",
+    "literature-review",
+    "automation"
+  ],
   "skills": "./skills/",
   "interface": {
     "displayName": "paper-ops",
     "shortDescription": "Search academic paper sources and save normalized result sets.",
-    "longDescription": "Gemini-first local academic paper discovery workflow with saved markdown and JSON artifacts.",
+    "longDescription": "Repo-local Codex integration for the paper-ops workflow. Routes prompts into search, pipeline, tracker, and batch modes while keeping markdown and JSON artifacts aligned.",
     "category": "Research",
     "capabilities": [
       "Interactive",
       "Write"
     ],
+    "websiteURL": "https://github.com/JoaopauloRM700/paper-ops",
+    "termsOfServiceURL": "https://github.com/JoaopauloRM700/paper-ops/blob/Workspace/LICENSE",
     "defaultPrompt": [
       "paper-ops",
-      "paper-ops search \"systematic review AND rag\"",
+      "paper-ops search \"systematic review\" AND \"retrieval augmented generation\"",
       "paper-ops tracker"
     ],
     "brandColor": "#0B5FFF"

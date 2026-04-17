@@ -38,6 +38,12 @@ paper-ops tracker            -> Print the search history index
 paper-ops batch              -> Process batch/batch-input.tsv
 ```
 
+For resumable shell-based batch orchestration with logs and state tracking:
+
+```bash
+bash batch/batch-runner.sh --fixtures
+```
+
 ## Configuration
 
 The main config surface is `config/sources.yml`. It is stored as JSON-compatible YAML so it stays dependency-free and easy to edit.
@@ -81,6 +87,7 @@ Saved artifacts:
 
 ```bash
 npm test
+node test-all.mjs
 node doctor.mjs
 node verify.mjs
 npm run search:smoke
