@@ -83,9 +83,11 @@ Observed results:
 - Pushing to `https://github.com/JoaopauloRM700` will require either:
   - `gh` installed and authenticated, or
   - an existing remote repo plus authenticated git push access
+- The local repo remote was configured as `https://github.com/JoaopauloRM700/paper-ops.git`
+- A direct push attempt reached GitHub and failed with `Repository not found`, which indicates the remote repository has not been created yet (or is not accessible to the current credentials)
 
 ## Next Steps
 
-1. Create the initial local commit
-2. Add or configure the GitHub remote
-3. Push once an authenticated publish path is available
+1. Create the `JoaopauloRM700/paper-ops` repository on GitHub
+2. Push `main` from this local repo once the remote exists
+3. Optionally install/authenticate `gh` for future GitHub automation
