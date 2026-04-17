@@ -1,0 +1,32 @@
+{
+  "articles": [
+    {
+      "article_number": "IEEE-ALPHA",
+      "title": "Evidence Mapping with RAG Pipelines",
+      "authors": {
+        "authors": [
+          { "full_name": "Ada Lovelace" }
+        ]
+      },
+      "publication_year": 2024,
+      "publication_title": "IEEE Transactions on Applied AI",
+      "doi": "10.1000/alpha",
+      "html_url": "https://ieeexplore.ieee.org/document/IEEE-ALPHA",
+      "abstract": "IEEE abstract for alpha."
+    },
+    {
+      "article_number": "IEEE-GAMMA",
+      "title": "Neural Topic Models for Evidence Synthesis",
+      "authors": {
+        "authors": [
+          { "full_name": "Barbara Liskov" }
+        ]
+      },
+      "publication_year": 2022,
+      "publication_title": "IEEE Access",
+      "doi": "10.1000/gamma",
+      "html_url": "https://ieeexplore.ieee.org/document/IEEE-GAMMA",
+      "abstract": "IEEE abstract for gamma."
+    }
+  ]
+}

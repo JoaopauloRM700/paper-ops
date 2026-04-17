@@ -1,0 +1,22 @@
+{
+  "name": "paper-ops",
+  "version": "0.1.0",
+  "description": "Academic paper search router and workflow skill for Codex.",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "paper-ops",
+    "shortDescription": "Search academic paper sources and save normalized result sets.",
+    "longDescription": "Gemini-first local academic paper discovery workflow with saved markdown and JSON artifacts.",
+    "category": "Research",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "paper-ops",
+      "paper-ops search \"systematic review AND rag\"",
+      "paper-ops tracker"
+    ],
+    "brandColor": "#0B5FFF"
+  }
+}

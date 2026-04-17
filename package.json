@@ -1,0 +1,25 @@
+{
+  "name": "paper-ops",
+  "version": "0.1.0",
+  "description": "Gemini-first academic paper search tool with multi-source adapters and saved search runs.",
+  "type": "module",
+  "bin": {
+    "paper-ops": "./paper-ops.mjs"
+  },
+  "scripts": {
+    "test": "node --test --test-isolation=none tests/*.test.mjs",
+    "doctor": "node doctor.mjs",
+    "verify": "node verify.mjs",
+    "search:smoke": "node paper-ops.mjs search \"systematic review AND retrieval augmented generation\" --fixtures"
+  },
+  "keywords": [
+    "academic-search",
+    "gemini-cli",
+    "papers",
+    "literature-review",
+    "scopus",
+    "ieee",
+    "acm"
+  ],
+  "license": "MIT"
+}

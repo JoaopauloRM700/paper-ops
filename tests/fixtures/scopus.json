@@ -1,0 +1,25 @@
+{
+  "search-results": {
+    "entry": [
+      {
+        "dc:identifier": "SCOPUS_ID:SCOPUS-ALPHA",
+        "dc:title": "Evidence Mapping with RAG Pipelines",
+        "dc:creator": "Ada Lovelace",
+        "prism:coverDate": "2024-04-01",
+        "prism:publicationName": "Journal of Evidence Automation",
+        "prism:doi": "10.1000/alpha",
+        "prism:url": "https://api.elsevier.com/content/abstract/scopus_id/SCOPUS-ALPHA",
+        "dc:description": "Scopus abstract for alpha."
+      },
+      {
+        "dc:identifier": "SCOPUS_ID:SCOPUS-BETA",
+        "dc:title": "Knowledge Graphs for Literature Screening",
+        "dc:creator": "Grace Hopper",
+        "prism:coverDate": "2023-05-10",
+        "prism:publicationName": "Knowledge Systems Review",
+        "prism:url": "https://api.elsevier.com/content/abstract/scopus_id/SCOPUS-BETA",
+        "dc:description": "Scopus abstract for beta."
+      }
+    ]
+  }
+}

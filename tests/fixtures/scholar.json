@@ -1,0 +1,15 @@
+{
+  "items": [
+    {
+      "result_id": "SCHOLAR-EPSILON",
+      "title": "Evaluating Search Strategies for Academic Paper Discovery",
+      "authors": [
+        "Donald Knuth"
+      ],
+      "year": 2021,
+      "venue": "Google Scholar",
+      "url": "https://scholar.google.com/scholar?cluster=SCHOLAR-EPSILON",
+      "abstract": "Scholar abstract for epsilon."
+    }
+  ]
+}

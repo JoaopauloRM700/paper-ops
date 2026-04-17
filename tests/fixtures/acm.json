@@ -1,0 +1,28 @@
+{
+  "items": [
+    {
+      "id": "ACM-BETA",
+      "title": "Knowledge Graphs for Literature Screening",
+      "authors": [
+        { "name": "Grace Hopper" }
+      ],
+      "publicationDate": "2023-09-12",
+      "containerTitle": "ACM Computing Surveys",
+      "doi": "",
+      "url": "https://dl.acm.org/doi/ACM-BETA",
+      "abstract": "ACM abstract for beta."
+    },
+    {
+      "id": "ACM-DELTA",
+      "title": "Prompt Engineering for Evidence-Based Medicine",
+      "authors": [
+        { "name": "Katherine Johnson" }
+      ],
+      "publicationDate": "2025-01-22",
+      "containerTitle": "Proceedings of ACM Health",
+      "doi": "10.1000/delta",
+      "url": "https://dl.acm.org/doi/ACM-DELTA",
+      "abstract": "ACM abstract for delta."
+    }
+  ]
+}
