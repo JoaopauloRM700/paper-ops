@@ -88,6 +88,7 @@ console.log('\npaper-ops test suite\n');
 console.log('1. Module load checks');
 for (const relativePath of [
   'paper-ops.mjs',
+  'paper-ops-gemini.mjs',
   'doctor.mjs',
   'verify.mjs',
   ...collectFiles(join(ROOT, 'src'), (path) => path.endsWith('.mjs'), 'src'),
@@ -105,6 +106,8 @@ for (const relativePath of [
   'README.md',
   'AGENTS.md',
   'GEMINI.md',
+  '.env.example',
+  'paper-ops-gemini.mjs',
   'config/sources.yml',
   'modes/_shared.md',
   'modes/search.md',
@@ -204,7 +207,7 @@ assert(
 );
 
 const doctorLines = [];
-const doctorResult = runDoctor({ stdout: (line) => doctorLines.push(line) });
+const doctorResult = await runDoctor({ stdout: (line) => doctorLines.push(line) });
 assert(doctorResult.failures === 0, 'doctor.mjs logic passed', 'doctor.mjs logic failed');
 if (doctorResult.warnings > 0) {
   warn(`doctor.mjs emitted ${doctorResult.warnings} warning(s): ${doctorLines.filter((line) => line.startsWith('WARN')).join(' | ')}`);

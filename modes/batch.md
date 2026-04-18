@@ -9,3 +9,5 @@ id	query
 1	("systematic review" AND rag)
 2	("knowledge graph" AND screening)
 ```
+
+After processing, summarize the completed searches in terminal output instead of only printing a raw count.

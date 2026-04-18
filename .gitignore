@@ -11,3 +11,4 @@ data/*.md
 batch/batch-state.tsv
 batch/logs/
 batch/tracker-additions/
+config/keys.txt

@@ -17,11 +17,12 @@ Use this repo as a local academic paper discovery workspace.
 - `paper-ops pipeline` -> process queued searches
 - `paper-ops tracker` -> show prior search runs
 - `paper-ops batch` -> process batch input
+- `paper-ops-gemini <command>` -> one-shot Gemini wrapper for the same router
 
 ## Data Contract
 
 - User/runtime artifacts: `data/*`, `reports/*`, `output/*`
-- User-editable config: `config/sources.yml`
-- System files: `src/*`, `paper-ops.mjs`, `doctor.mjs`, `verify.mjs`, `modes/*`, `docs/*`, this file
+- User-editable config: `config/sources.yml`, `.env`
+- System files: `src/*`, `paper-ops.mjs`, `paper-ops-gemini.mjs`, `doctor.mjs`, `verify.mjs`, `modes/*`, `docs/*`, this file
 
 Do not overwrite saved search artifacts unless the user explicitly asks for cleanup.

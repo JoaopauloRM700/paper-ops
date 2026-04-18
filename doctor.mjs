@@ -2,8 +2,10 @@
 
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { readSourcesConfig } from './src/lib/config.mjs';
 
 const projectRoot = dirname(fileURLToPath(import.meta.url));
 const requiredSourceKeys = ['scopus', 'ieee', 'acm', 'google_scholar'];
@@ -30,13 +32,35 @@ function checkConfigFile() {
   }
 
   try {
-    const parsed = JSON.parse(readFileSync(configPath, 'utf8'));
+    const parsed = readSourcesConfig(projectRoot);
     const missingSources = requiredSourceKeys.filter((key) => !parsed.sources || !parsed.sources[key]);
     if (missingSources.length > 0) {
       return createCheck(
         false,
         'config/sources.yml defines required sources',
         `Add source entries for: ${missingSources.join(', ')}`,
+      );
+    }
+
+    const missingSearchUrls = Object.entries(parsed.sources ?? {})
+      .filter(([, sourceConfig]) => sourceConfig.enabled && sourceConfig.mode === 'live' && !sourceConfig.search_url)
+      .map(([sourceName]) => sourceName);
+    if (missingSearchUrls.length > 0) {
+      return createCheck(
+        false,
+        'config/sources.yml defines browser search URLs for live sources',
+        `Add search_url for: ${missingSearchUrls.join(', ')}`,
+      );
+    }
+
+    const missingApiUrls = Object.entries(parsed.sources ?? {})
+      .filter(([, sourceConfig]) => sourceConfig.enabled && sourceConfig.mode === 'api' && !sourceConfig.api_url)
+      .map(([sourceName]) => sourceName);
+    if (missingApiUrls.length > 0) {
+      return createCheck(
+        false,
+        'config/sources.yml defines API endpoints for api sources',
+        `Add api_url for: ${missingApiUrls.join(', ')}`,
       );
     }
 
@@ -47,6 +71,31 @@ function checkConfigFile() {
       'config/sources.yml parsed successfully',
       `The file must stay JSON-compatible YAML. Parse error: ${error.message}`,
     );
+  }
+}
+
+function checkApiCredentials() {
+  try {
+    const parsed = readSourcesConfig(projectRoot);
+    const missingApiKeys = Object.entries(parsed.sources ?? {})
+      .filter(([, sourceConfig]) => sourceConfig.enabled && sourceConfig.mode === 'api' && !sourceConfig.api_key)
+      .map(([sourceName]) => sourceName);
+
+    if (missingApiKeys.length === 0) {
+      return createCheck(true, 'API credentials ready for api sources');
+    }
+
+    return {
+      level: 'warn',
+      label: `API credentials missing for api sources: ${missingApiKeys.join(', ')}`,
+      hint: 'Provide keys via config/keys.txt or environment variables before running api-mode searches.',
+    };
+  } catch {
+    return {
+      level: 'warn',
+      label: 'API credentials could not be validated',
+      hint: 'Fix config parsing errors first, then rerun doctor.',
+    };
   }
 }
 
@@ -70,6 +119,30 @@ function checkFixtures() {
     'fixture responses available',
     missing.length === 0 ? '' : `Missing fixtures: ${missing.join(', ')}`,
   );
+}
+
+async function checkPlaywrightRuntime() {
+  let executablePath = '';
+  try {
+    const { chromium } = await import('playwright');
+    executablePath = chromium.executablePath();
+  } catch {
+    return createCheck(
+      false,
+      'Playwright runtime available',
+      'Run `npm install playwright` in the repo root.',
+    );
+  }
+
+  if (!executablePath || !existsSync(executablePath)) {
+    return createCheck(
+      false,
+      'Chromium browser installed',
+      'Run `npx playwright install chromium` in the repo root.',
+    );
+  }
+
+  return createCheck(true, 'Playwright runtime and Chromium browser available');
 }
 
 function checkBatchAssets() {
@@ -106,42 +179,23 @@ function checkAgentCli() {
     return { level: 'warn', label: 'No Gemini, Claude, or Codex CLI found in PATH', hint: 'The repo still works via node, but agent routing will be limited.' };
   }
 
-  return { level: 'ok', label: `Agent CLI detected (${found.join(', ')})`, hint: '' };
-}
-
-function checkCredentialWarnings() {
-  const configPath = join(projectRoot, 'config', 'sources.yml');
-  if (!existsSync(configPath)) {
-    return [];
+  if (!found.includes('gemini')) {
+    return {
+      level: 'warn',
+      label: `Gemini CLI not found in PATH (other agents detected: ${found.join(', ')})`,
+      hint: 'Install Gemini CLI to use `gemini` or `paper-ops-gemini`; the direct node runtime still works without it.',
+    };
   }
 
-  try {
-    const parsed = JSON.parse(readFileSync(configPath, 'utf8'));
-    const warnings = [];
-    for (const [name, sourceConfig] of Object.entries(parsed.sources ?? {})) {
-      if (!sourceConfig.enabled || sourceConfig.mode !== 'live' || !sourceConfig.api_key_env) {
-        continue;
-      }
-
-      if (!process.env[sourceConfig.api_key_env]) {
-        warnings.push({
-          level: 'warn',
-          label: `Missing credential for live source ${name}`,
-          hint: `Set ${sourceConfig.api_key_env} or use --fixtures for deterministic local runs.`,
-        });
-      }
-    }
-
-    return warnings;
-  } catch {
-    return [];
-  }
+  return { level: 'ok', label: `Gemini CLI detected${found.length > 1 ? ` (${found.join(', ')})` : ''}`, hint: '' };
 }
 
-export function getDoctorChecks() {
+export async function getDoctorChecks() {
   return [
     checkNodeVersion(),
     checkConfigFile(),
+    checkApiCredentials(),
+    await checkPlaywrightRuntime(),
     checkProjectDir('data'),
     checkProjectDir('reports'),
     checkProjectDir('output'),
@@ -150,13 +204,12 @@ export function getDoctorChecks() {
     checkBatchAssets(),
     checkPluginSurface(),
     checkAgentCli(),
-    ...checkCredentialWarnings(),
   ];
 }
 
-export function runDoctor(io = {}) {
+export async function runDoctor(io = {}) {
   const { stdout = console.log } = io;
-  const checks = getDoctorChecks();
+  const checks = await getDoctorChecks();
   let failures = 0;
   let warnings = 0;
 
@@ -190,7 +243,7 @@ export function runDoctor(io = {}) {
   return { checks, failures, warnings };
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const result = runDoctor();
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+  const result = await runDoctor();
   process.exit(result.failures === 0 ? 0 : 1);
 }

@@ -216,3 +216,187 @@ Intent:
 1. create a new branch for the transferred-file remediation work
 2. commit the current `paper-ops` adjustments there
 3. delete `Workspace` after the replacement branch is established
+
+## Browser-Driven Live Search Pivot
+
+The project direction was clarified after implementation had already assumed API-backed live sources for Scopus and IEEE.
+
+### Correction from the user
+
+- Live searches should not depend on source APIs
+- Searches should be performed in web browsers
+- Result links and article metadata should be extracted from the source result pages
+- This applies to all configured sources, including ACM and Google Scholar
+
+### Implementation changes
+
+1. Added `playwright` as the runtime dependency for live browser automation.
+2. Replaced API-era live-source assumptions in config with browser `search_url` settings.
+3. Added a shared Playwright browser runtime:
+   - one browser per search run
+   - one page per source search
+   - browser lifecycle managed in `search-runner`
+4. Reworked all live adapters to build source-specific search URLs and extract visible metadata from browser-loaded result pages.
+5. Kept fixture mode as the primary automated verification path.
+6. Reworked doctor checks to validate Playwright plus Chromium availability instead of API credentials.
+7. Added browser-oriented tests for:
+   - per-source result extraction
+   - browser live mode without API keys
+   - graceful skipping when the browser runtime cannot start
+
+### Updated verification evidence
+
+```bash
+node --test --test-isolation=none tests/*.test.mjs
+node doctor.mjs
+```
+
+Observed results after the browser pivot:
+
+- 7 tests passed, 0 failed
+- `doctor.mjs` passed with Playwright and Chromium detected
+
+## PDF Availability Enrichment
+
+The result model was extended so each normalized `PaperRecord` now also carries:
+
+- `pdf_available`
+- `pdf_url`
+
+### Behavior
+
+1. Fixture-backed and browser-driven adapters now attempt to detect direct PDF links per source.
+2. IEEE and ACM currently populate direct PDF URLs from both fixtures and browser result pages where available.
+3. Scopus and Google Scholar default to `null` PDF availability when the result page does not expose a reliable PDF link.
+4. Deduplication now enriches the retained canonical record with PDF metadata discovered on later duplicate records instead of discarding that metadata.
+5. Markdown reports now include `PDF Available` and `PDF URL` columns, and JSON exports include both fields in each record.
+
+### Verification evidence
+
+The PDF enrichment changes were implemented test-first and verified with:
+
+```bash
+node --test --test-isolation=none tests/dedup.test.mjs tests/browser-adapters.test.mjs tests/search-runner.test.mjs
+```
+
+Observed results:
+
+- 7 targeted tests passed, 0 failed
+
+## Gemini-First Terminal Surface Restoration
+
+The original project expectation was clarified further: the repo should not only have a local runtime, it should also feel operationally agent-first in the terminal, especially through Gemini CLI.
+
+### Problem
+
+The earlier `paper-ops` implementation had the search engine and saved artifacts, but it still behaved mainly like a direct Node CLI:
+
+- `paper-ops.mjs` only printed artifact paths
+- the Gemini-facing docs existed, but the interactive/router-style experience from the original project had not been fully restored
+- there was no explicit one-shot Gemini wrapper surface
+
+### Adjustments made
+
+1. Added terminal rendering helpers so `paper-ops` now prints:
+   - search summary
+   - source coverage
+   - top results
+   - PDF status
+   - artifact paths
+2. Added `paper-ops-gemini.mjs` plus package bin wiring as an explicit one-shot Gemini wrapper.
+3. Enriched `GEMINI.md`, `README.md`, `docs/SETUP.md`, and mode files so the Gemini usage path now mirrors the operational style of the original repository more closely.
+4. Updated `doctor.mjs` to report Gemini CLI availability explicitly instead of only reporting generic agent CLI detection.
+5. Added red-first tests for:
+   - terminal summary rendering through `main()`
+   - Gemini prompt canonicalization for one-shot wrapper usage
+
+### Verification evidence
+
+```bash
+node --test --test-isolation=none tests/*.test.mjs
+node doctor.mjs
+node verify.mjs
+node test-all.mjs
+npm run search:smoke
+```
+
+Observed results:
+
+- 9 unit/integration tests passed, 0 failed
+- `doctor.mjs` passed with 1 warning because Gemini CLI is not installed in the current environment PATH
+- `test-all.mjs` passed with 2 warnings:
+  - Gemini CLI missing locally
+  - `dashboard/` still deferred
+
+## IEEE and Scopus API Pivot
+
+Live browser extraction proved unreliable for Scopus and IEEE in the current environment, while the user later supplied official API keys for both systems through `config/keys.txt`.
+
+### Decision
+
+The runtime now uses a hybrid source model:
+
+- `scopus` -> official Scopus Search API
+- `ieee` -> official IEEE Xplore Metadata API
+- `acm` -> browser-driven extraction
+- `google_scholar` -> browser-driven extraction, still experimental
+
+### Adjustments made
+
+1. Added local API key resolution in `src/lib/config.mjs`:
+   - reads gitignored `config/keys.txt`
+   - allows `SCOPUS_API_KEY` and `IEEE_API_KEY` to override local file values
+2. Added `mode: "api"` support for source configs.
+3. Reworked `scopus` and `ieee` adapters so they can execute against official APIs instead of Playwright.
+4. Updated `config/sources.yml` so Scopus and IEEE now default to `api` mode.
+5. Updated `doctor.mjs` so it validates:
+   - `api_url` presence for api-mode sources
+   - local API credential readiness for api-mode sources
+6. Updated docs to reflect the new hybrid architecture and local key handling.
+
+### Verification evidence
+
+```bash
+node --test --test-isolation=none tests/*.test.mjs
+node doctor.mjs
+```
+
+Observed results:
+
+- 12 tests passed, 0 failed
+- `doctor.mjs` reports API credentials ready for api-mode sources
+
+### External validation snapshot
+
+One live validation was run outside the sandbox after the adapter changes:
+
+- `scopus` returned records successfully through the official API
+- `ieee` returned `HTTP 403` with `Developer Inactive`, indicating the supplied IEEE key is not currently active for metadata search in the upstream service
+- `acm` remains browser-driven and can still return zero depending on current site behavior
+- `google_scholar` remained browser-driven and returned records in that validation
+
+## Local Environment File Setup
+
+The credential-loading flow was then tightened so the repository supports both a tracked template and a private local key file.
+
+### Adjustments made
+
+1. Added a tracked `.env.example` file with placeholder entries for:
+   - `SCOPUS_API_KEY`
+   - `IEEE_API_KEY`
+2. Added a local `.env` file in the working copy containing the user's real keys.
+3. Kept `.env` ignored by git so the real credentials cannot be committed.
+4. Kept `config/keys.txt` as a backward-compatible fallback, but changed the preferred local workflow to `.env`.
+5. Added `src/lib/env.mjs` to parse `.env` and merge it with process environment variables.
+6. Updated `src/lib/config.mjs` so API key resolution precedence is now:
+   - process environment
+   - local `.env`
+   - local `config/keys.txt`
+7. Updated docs and repo checks so the tracked template is part of the public contract.
+
+### Intent
+
+This satisfies the repository split the user requested:
+
+- one env file that can be versioned safely as a template
+- one env file that stays local with private credentials

@@ -9,6 +9,11 @@ import { readSourcesConfig } from './src/lib/config.mjs';
 import { processQueuedSearches } from './src/lib/pipeline.mjs';
 import { runSearchAndPersist } from './src/lib/search-runner.mjs';
 import { readSearchHistory } from './src/lib/tracker.mjs';
+import {
+  renderSearchCollectionSummary,
+  renderSearchHistorySummary,
+  renderSearchRunSummary,
+} from './src/lib/terminal-ui.mjs';
 
 export async function main(argv = process.argv.slice(2), io = {}) {
   const { stdout = console.log } = io;
@@ -41,10 +46,8 @@ export async function main(argv = process.argv.slice(2), io = {}) {
         projectRoot,
         fixtureDir,
       });
-      stdout(`Saved markdown report: ${result.artifacts.markdownReport}`);
-      stdout(`Saved JSON export: ${result.artifacts.jsonExport}`);
+      stdout(renderSearchRunSummary(result));
       return result;
-      break;
     }
     case 'pipeline': {
       const results = await processQueuedSearches({
@@ -52,20 +55,22 @@ export async function main(argv = process.argv.slice(2), io = {}) {
         projectRoot,
         fixtureDir,
       });
-      stdout(`Processed ${results.length} queued search(es).`);
+      stdout(renderSearchCollectionSummary('pipeline', results));
       return results;
-      break;
     }
     case 'tracker':
-      stdout(readSearchHistory(projectRoot));
-      return readSearchHistory(projectRoot);
+      {
+        const history = readSearchHistory(projectRoot);
+        stdout(renderSearchHistorySummary(history));
+        return history;
+      }
     case 'batch': {
       const results = await processBatchQueries({
         config,
         projectRoot,
         fixtureDir,
       });
-      stdout(`Processed ${results.length} batch search(es).`);
+      stdout(renderSearchCollectionSummary('batch', results));
       return results;
     }
     default:

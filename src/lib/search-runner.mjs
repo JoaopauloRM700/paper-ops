@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { runSourceSearch } from './adapters/index.mjs';
+import { createPlaywrightBrowserRuntime } from './browser-runtime.mjs';
 import { deduplicatePaperRecords } from './papers.mjs';
 
 function slugify(input) {
@@ -37,6 +38,18 @@ function buildSourceCoverage(sourceResults) {
 }
 
 function renderMarkdownReport({ query, now, summary, records }) {
+  const formatPdfAvailability = (value) => {
+    if (value === true) {
+      return 'yes';
+    }
+
+    if (value === false) {
+      return 'no';
+    }
+
+    return 'unknown';
+  };
+
   const formatSourceName = (sourceName) =>
     sourceName
       .split('_')
@@ -48,10 +61,10 @@ function renderMarkdownReport({ query, now, summary, records }) {
     .join('\n');
 
   const recordRows = records
-    .map((record, index) => `| ${index + 1} | ${record.source} | ${record.title} | ${record.year ?? '-'} | ${record.venue || '-'} | ${record.doi || '-'} | ${record.url} |`)
+    .map((record, index) => `| ${index + 1} | ${record.source} | ${record.title} | ${record.year ?? '-'} | ${record.venue || '-'} | ${record.doi || '-'} | ${formatPdfAvailability(record.pdf_available)} | ${record.pdf_url || '-'} | ${record.url} |`)
     .join('\n');
 
-  return `# Academic Paper Search Report\n\n**Query:** ${query}\n**Generated At:** ${now.toISOString()}\n**Raw Records:** ${summary.totalRawRecords}\n**Unique Records:** ${records.length}\n**Duplicates Removed:** ${summary.duplicatesRemoved}\n\n## Source Coverage\n\n| Source | Status | Records | Reason |\n|---|---|---:|---|\n${coverageRows}\n\n## Results\n\n| # | Source | Title | Year | Venue | DOI | URL |\n|---|---|---|---:|---|---|---|\n${recordRows || '| - | - | No results | - | - | - | - |'}\n`;
+  return `# Academic Paper Search Report\n\n**Query:** ${query}\n**Generated At:** ${now.toISOString()}\n**Raw Records:** ${summary.totalRawRecords}\n**Unique Records:** ${records.length}\n**Duplicates Removed:** ${summary.duplicatesRemoved}\n\n## Source Coverage\n\n| Source | Status | Records | Reason |\n|---|---|---:|---|\n${coverageRows}\n\n## Results\n\n| # | Source | Title | Year | Venue | DOI | PDF Available | PDF URL | URL |\n|---|---|---|---:|---|---|---|---|---|\n${recordRows || '| - | - | No results | - | - | - | - | - | - |'}\n`;
 }
 
 function ensureHistoryIndex(projectRoot) {
@@ -82,23 +95,46 @@ export async function runConfiguredSearch({
   env = process.env,
   now = new Date(),
   fetchImpl = fetch,
+  browserRuntime,
+  browserFactory = createPlaywrightBrowserRuntime,
 }) {
   const retrievedAt = now.toISOString();
   const limit = config.defaults.per_source_limit;
   const sourceNames = Object.keys(config.sources);
   const sourceResults = [];
+  const hasLiveSource = sourceNames.some((sourceName) => config.sources[sourceName]?.enabled && config.sources[sourceName]?.mode === 'live');
+  let ownedBrowserRuntime = null;
+  let browserStartupError = '';
 
-  for (const sourceName of sourceNames) {
-    const result = await runSourceSearch(sourceName, {
-      query,
-      sourceConfig: config.sources[sourceName],
-      env,
-      fixtureDir,
-      retrievedAt,
-      fetchImpl,
-      limit,
-    });
-    sourceResults.push(result);
+  if (!browserRuntime && hasLiveSource) {
+    try {
+      ownedBrowserRuntime = await browserFactory(config.defaults);
+    } catch (error) {
+      browserStartupError = error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  const activeBrowserRuntime = browserRuntime ?? ownedBrowserRuntime;
+
+  try {
+    for (const sourceName of sourceNames) {
+      const result = await runSourceSearch(sourceName, {
+        query,
+        sourceConfig: config.sources[sourceName],
+        env,
+        fixtureDir,
+        retrievedAt,
+        fetchImpl,
+        limit,
+        browserRuntime: activeBrowserRuntime,
+        browserStartupError,
+      });
+      sourceResults.push(result);
+    }
+  } finally {
+    if (ownedBrowserRuntime) {
+      await ownedBrowserRuntime.close();
+    }
   }
 
   const rawRecords = sourceResults.flatMap((result) => result.records);
@@ -128,6 +164,8 @@ export async function runSearchAndPersist({
   env = process.env,
   now = new Date(),
   fetchImpl = fetch,
+  browserRuntime,
+  browserFactory,
 }) {
   ensureProjectDirs(projectRoot);
   const runId = buildRunId(query, now);
@@ -138,6 +176,8 @@ export async function runSearchAndPersist({
     env,
     now,
     fetchImpl,
+    browserRuntime,
+    browserFactory,
   });
 
   const markdownPath = join('reports', `${runId}.md`);

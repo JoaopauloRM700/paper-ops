@@ -4,11 +4,39 @@ You are the Gemini CLI agent for `paper-ops`, a local academic paper search tool
 
 ## Core Rules
 
+- Work from the repository root so `paper-ops` is the visible router surface
 - Treat `paper-ops` as the main router surface
 - Treat a raw Boolean/literature search string as a `search` request
 - Prefer the saved-search workflow over ad hoc one-off output
 - Preserve existing search history and output artifacts
 - Keep Google Scholar best-effort and non-blocking
+- After running a search, show the user a concise terminal summary with source coverage, top matches, PDF availability, and artifact paths
+- Prefer the official APIs for Scopus and IEEE when keys are available locally
+
+## Interactive Usage
+
+Start Gemini in the repo root:
+
+```bash
+gemini
+```
+
+Then use the router directly in the prompt:
+
+```text
+paper-ops
+paper-ops search "\"systematic review\" AND rag"
+paper-ops tracker
+paper-ops pipeline
+paper-ops batch
+paper-ops ("knowledge graph" AND screening)
+```
+
+For one-shot terminal usage, the repo also exposes:
+
+```bash
+node paper-ops-gemini.mjs search "\"systematic review\" AND rag" --fixtures
+```
 
 ## Mode Routing
 
@@ -24,6 +52,13 @@ You are the Gemini CLI agent for `paper-ops`, a local academic paper search tool
 ## Runtime Notes
 
 - Config file: `config/sources.yml`
+- Local API key files:
+  - `.env` as the primary local source
+  - `config/keys.txt` as a legacy fallback
+- Live source execution uses Playwright plus Chromium browser automation
+- API mode is supported for Scopus and IEEE
+- Prefer invoking the local runtime in `paper-ops.mjs` when fulfilling a routed request
+- The local runtime already renders terminal-friendly summaries for `search`, `tracker`, `pipeline`, and `batch`
 - Primary artifact outputs:
   - `reports/*.md`
   - `output/*.json`
