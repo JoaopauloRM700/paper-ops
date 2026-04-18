@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "paper-ops batch worker output",
+  "type": "object",
+  "required": [
+    "id",
+    "query",
+    "status",
+    "report_path",
+    "json_path",
+    "summary",
+    "notes"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "query": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["completed", "failed", "skipped"]
+    },
+    "report_path": {
+      "type": "string"
+    },
+    "json_path": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "raw_records",
+        "unique_records",
+        "duplicates_removed",
+        "source_coverage"
+      ],
+      "properties": {
+        "raw_records": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unique_records": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "duplicates_removed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "source_coverage": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": true
+    },
+    "notes": {
+      "type": "string"
+    },
+    "error": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

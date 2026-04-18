@@ -4,13 +4,16 @@
   "description": "Gemini-first academic paper search tool with multi-source adapters and saved search runs.",
   "type": "module",
   "bin": {
-    "paper-ops": "./paper-ops.mjs"
+    "paper-ops": "./paper-ops.mjs",
+    "paper-ops-gemini": "./paper-ops-gemini.mjs"
   },
   "scripts": {
     "test": "node --test --test-isolation=none tests/*.test.mjs",
+    "test:all": "node test-all.mjs",
     "doctor": "node doctor.mjs",
     "verify": "node verify.mjs",
-    "search:smoke": "node paper-ops.mjs search \"systematic review AND retrieval augmented generation\" --fixtures"
+    "search:smoke": "node paper-ops.mjs search \"systematic review AND retrieval augmented generation\" --fixtures",
+    "gemini:menu": "node paper-ops-gemini.mjs"
   },
   "keywords": [
     "academic-search",
@@ -21,5 +24,8 @@
     "ieee",
     "acm"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "playwright": "^1.59.1"
+  }
 }

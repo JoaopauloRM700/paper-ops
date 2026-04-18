@@ -7,3 +7,8 @@ Thumbs.db
 .env
 reports/*.md
 output/*.json
+data/*.md
+batch/batch-state.tsv
+batch/logs/
+batch/tracker-additions/
+config/keys.txt

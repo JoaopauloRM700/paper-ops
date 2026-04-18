@@ -18,6 +18,8 @@ test('normalizePaperRecord returns the agreed PaperRecord shape', () => {
     doi: '10.1000/RAG-SR',
     url: 'https://example.org/paper/rag-systematic-reviews',
     abstract: 'A survey of RAG-assisted evidence synthesis.',
+    pdf_available: true,
+    pdf_url: ' https://example.org/paper/rag-systematic-reviews.pdf ',
     matched_query: '("retrieval augmented generation" AND "systematic review")',
     retrieved_at: now,
   });
@@ -32,6 +34,8 @@ test('normalizePaperRecord returns the agreed PaperRecord shape', () => {
     doi: '10.1000/rag-sr',
     url: 'https://example.org/paper/rag-systematic-reviews',
     abstract: 'A survey of RAG-assisted evidence synthesis.',
+    pdf_available: true,
+    pdf_url: 'https://example.org/paper/rag-systematic-reviews.pdf',
     matched_query: '("retrieval augmented generation" AND "systematic review")',
     retrieved_at: now,
   });
@@ -49,6 +53,8 @@ test('deduplicatePaperRecords prefers DOI, then source identity, then title plus
       doi: '10.1000/alpha',
       url: 'https://example.org/alpha-scopus',
       abstract: 'alpha from scopus',
+      pdf_available: null,
+      pdf_url: '',
       matched_query: 'rag evidence mapping',
       retrieved_at: '2026-04-17T15:00:00.000Z',
     }),
@@ -62,6 +68,8 @@ test('deduplicatePaperRecords prefers DOI, then source identity, then title plus
       doi: '10.1000/alpha',
       url: 'https://example.org/alpha-ieee',
       abstract: 'alpha from ieee',
+      pdf_available: true,
+      pdf_url: 'https://example.org/alpha-ieee.pdf',
       matched_query: 'rag evidence mapping',
       retrieved_at: '2026-04-17T15:00:00.000Z',
     }),
@@ -75,6 +83,8 @@ test('deduplicatePaperRecords prefers DOI, then source identity, then title plus
       doi: '',
       url: 'https://example.org/beta',
       abstract: 'beta from acm',
+      pdf_available: null,
+      pdf_url: '',
       matched_query: 'knowledge graphs literature screening',
       retrieved_at: '2026-04-17T15:00:00.000Z',
     }),
@@ -88,6 +98,8 @@ test('deduplicatePaperRecords prefers DOI, then source identity, then title plus
       doi: '',
       url: 'https://scholar.example.org/beta',
       abstract: 'beta from scholar',
+      pdf_available: true,
+      pdf_url: 'https://scholar.example.org/beta.pdf',
       matched_query: 'knowledge graphs literature screening',
       retrieved_at: '2026-04-17T15:00:00.000Z',
     }),
@@ -101,6 +113,8 @@ test('deduplicatePaperRecords prefers DOI, then source identity, then title plus
       doi: '10.1000/gamma',
       url: 'https://example.org/gamma',
       abstract: 'gamma',
+      pdf_available: false,
+      pdf_url: '',
       matched_query: 'topic model evidence synthesis',
       retrieved_at: '2026-04-17T15:00:00.000Z',
     }),
@@ -116,4 +130,8 @@ test('deduplicatePaperRecords prefers DOI, then source identity, then title plus
     sourceIdentity: 0,
     titleYear: 1,
   });
+  assert.equal(result.uniqueRecords[0].pdf_available, true);
+  assert.equal(result.uniqueRecords[0].pdf_url, 'https://example.org/alpha-ieee.pdf');
+  assert.equal(result.uniqueRecords[1].pdf_available, true);
+  assert.equal(result.uniqueRecords[1].pdf_url, 'https://scholar.example.org/beta.pdf');
 });

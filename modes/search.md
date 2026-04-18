@@ -10,3 +10,4 @@ Workflow:
 4. Deduplicate
 5. Save markdown + JSON artifacts
 6. Update `data/search-history.md`
+7. Summarize source coverage, top matches, PDF availability, and artifact paths in terminal output

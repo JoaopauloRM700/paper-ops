@@ -1,33 +1,39 @@
 {
   "defaults": {
     "per_source_limit": 10,
-    "fixture_mode": false
+    "fixture_mode": false,
+    "browser_headless": true,
+    "browser_navigation_timeout_ms": 30000,
+    "browser_result_timeout_ms": 15000,
+    "browser_settle_time_ms": 1500
   },
   "sources": {
     "scopus": {
       "enabled": true,
-      "mode": "live",
-      "api_key_env": "SCOPUS_API_KEY",
-      "endpoint": "https://api.elsevier.com/content/search/scopus",
+      "mode": "api",
+      "api_url": "https://api.elsevier.com/content/search/scopus",
+      "search_url": "https://www.scopus.com/results/results.uri",
       "fixture": "scopus.json"
     },
     "ieee": {
       "enabled": true,
-      "mode": "live",
-      "api_key_env": "IEEE_API_KEY",
-      "endpoint": "https://ieeexploreapi.ieee.org/api/v1/search/articles",
+      "mode": "api",
+      "api_url": "https://ieeexploreapi.ieee.org/api/v1/search/articles",
+      "search_url": "https://ieeexplore.ieee.org/search/searchresult.jsp",
       "fixture": "ieee.json"
     },
     "acm": {
       "enabled": true,
       "mode": "live",
-      "endpoint": "https://api.crossref.org/works",
+      "search_url": "https://dl.acm.org/action/doSearch",
       "fixture": "acm.json"
     },
     "google_scholar": {
-      "enabled": false,
+      "enabled": true,
       "experimental": true,
       "mode": "live",
+      "search_url": "https://scholar.google.com/scholar",
+      "settle_time_ms": 2000,
       "fixture": "scholar.json"
     }
   }
