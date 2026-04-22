@@ -11,9 +11,9 @@ export function buildGeminiPrompt(argv = []) {
     return 'paper-ops';
   }
 
-  if (routed.mode === 'search') {
+  if (routed.mode === 'search' || routed.mode === 'csv') {
     return routed.query
-      ? `paper-ops search ${JSON.stringify(routed.query)}${fixturesFlag}`
+      ? `paper-ops ${routed.mode} ${JSON.stringify(routed.query)}${fixturesFlag}`
       : `paper-ops${fixturesFlag}`;
   }
 

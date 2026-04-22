@@ -13,6 +13,7 @@ Use this repo as a local academic paper discovery workspace.
 
 - `paper-ops` -> show the command menu
 - `paper-ops search <query>` -> run a saved search
+- `paper-ops csv <query>` -> export a CSV from saved runs for one search string
 - Raw Boolean/literature query text -> route to `search`
 - `paper-ops pipeline` -> process queued searches
 - `paper-ops tracker` -> show prior search runs
