@@ -185,6 +185,8 @@ npm run search:smoke
 
 - The dependency installation step is mandatory. Without `npm install`, the repo has no `playwright` package; without `npx playwright install chromium`, browser-driven sources will fail.
 - Scopus and IEEE now default to official API-backed retrieval when local keys are available.
+   IEEE Xplore API: https://developer.ieee.org/docs
+   Elsevier Research Products APIs : https://dev.elsevier.com/
 - `.env.example` is the tracked template. `.env` is local-only and ignored by git.
 - ACM and Google Scholar remain browser-driven.
 - Google Scholar is still experimental and best-effort.
