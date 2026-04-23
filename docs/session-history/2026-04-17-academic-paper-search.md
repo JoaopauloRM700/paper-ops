@@ -400,3 +400,88 @@ This satisfies the repository split the user requested:
 
 - one env file that can be versioned safely as a template
 - one env file that stays local with private credentials
+
+## IEEE Activation Status and Remote Snapshot
+
+After the API transition, the IEEE program team confirmed the current metadata key is still waiting for upstream activation.
+
+### Operational status
+
+- `scopus` is already usable through the official API
+- `google_scholar` is enabled and usable as a browser-driven fallback source
+- `ieee` is configured in the project but remains blocked until IEEE enables the key on their side
+- `acm` remains browser-driven and best-effort
+
+### IEEE note
+
+The activation notice indicates the IEEE key is in `waiting` status and will only become usable after IEEE enables it during their business-hour activation window. No additional code change is currently required for `paper-ops`; the project only needs the upstream key status to change from inactive to active.
+
+### Verification snapshot before release
+
+The following commands were rerun before the latest repository snapshot was recorded:
+
+```bash
+node --test --test-isolation=none tests/*.test.mjs
+node test-all.mjs
+npm run search:smoke
+```
+
+Observed results:
+
+- 13 tests passed, 0 failed
+- `test-all.mjs` passed with 2 expected warnings:
+  - Gemini CLI not found in PATH for this environment
+  - `dashboard/` still deferred
+- fixture smoke search completed successfully and wrote fresh artifacts
+
+### Git snapshot
+
+- branch: `codex-review-remediation`
+- commit: `bb6c210`
+- commit message: `feat: expand paper-ops source integrations`
+- pushed to: `origin/codex-review-remediation`
+
+## README Clarification
+
+The repository README was later refined to make dependency installation explicit instead of leaving it only implied in the quick-start block.
+
+### Clarified points
+
+- `npm install` is required because the project depends on `playwright`
+- `npx playwright install chromium` is required for browser-driven sources
+- Gemini CLI is optional and only needed for the interactive Gemini-first workflow
+- `npm link` is optional and only affects local command ergonomics
+
+## CSV Export by Search String
+
+The repository then received a correction based on a user request captured from the UI:
+
+- generating CSV from all `output/*.json` files together was too broad
+- CSV export needed to be scoped by search string instead
+
+### Adjustments made
+
+1. Added `src/lib/csv-export.mjs` as the reusable CSV export layer.
+2. Added `paper-ops csv "<query>"` to export a deduplicated CSV using only saved runs that match one search string.
+3. Changed the export behavior to:
+   - scan saved JSON outputs
+   - filter by normalized query string
+   - combine only matching runs
+   - deduplicate combined records
+   - write one CSV file back to `output/`
+4. Replaced the hardcoded one-off scripts with reusable wrappers:
+   - `json_to_csv.mjs` now exports one query passed by argument
+   - `consolidate_all.mjs` now generates one CSV per distinct saved query
+5. Updated the CLI help, Gemini prompt canonicalization, and README usage docs.
+
+### Verification evidence
+
+```bash
+node --test --test-isolation=none tests/csv-export.test.mjs
+node --test --test-isolation=none tests/cli-surface.test.mjs
+```
+
+Observed results:
+
+- CSV export tests passed
+- CLI routing and Gemini prompt tests passed for the new `csv` surface

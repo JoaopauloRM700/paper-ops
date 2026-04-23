@@ -127,6 +127,21 @@ export function renderSearchRunSummary(result, options = {}) {
   return sections.join('\n');
 }
 
+export function renderCsvExportSummary(result) {
+  return [
+    'paper-ops csv complete',
+    '',
+    `Query: ${result.query}`,
+    `Matching runs: ${result.matchedFiles.length}`,
+    `Raw records: ${result.totalRawRecords}`,
+    `Unique records: ${result.uniqueRecords}`,
+    `Duplicates removed: ${result.duplicatesRemoved}`,
+    '',
+    'Saved artifact',
+    `CSV: ${result.csvPath}`,
+  ].join('\n');
+}
+
 export function renderSearchCollectionSummary(modeName, results) {
   if (results.length === 0) {
     return `paper-ops ${modeName}\n\nNo searches were processed.`;

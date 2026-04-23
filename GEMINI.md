@@ -26,6 +26,7 @@ Then use the router directly in the prompt:
 ```text
 paper-ops
 paper-ops search "\"systematic review\" AND rag"
+paper-ops csv "\"systematic review\" AND rag"
 paper-ops tracker
 paper-ops pipeline
 paper-ops batch
@@ -45,6 +46,7 @@ node paper-ops-gemini.mjs search "\"systematic review\" AND rag" --fixtures
 | `paper-ops` | discovery | Show the command menu |
 | Raw query text | `search` | Run a multi-source search and save artifacts |
 | `paper-ops search <query>` | `search` | Explicit search |
+| `paper-ops csv <query>` | `csv` | Export a deduplicated CSV from saved runs for one query |
 | `paper-ops pipeline` | `pipeline` | Process `data/search-queue.md` |
 | `paper-ops tracker` | `tracker` | Show `data/search-history.md` |
 | `paper-ops batch` | `batch` | Process `batch/batch-input.tsv` |

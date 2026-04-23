@@ -16,13 +16,41 @@ Gemini-first academic paper search tooling built for local, source-aware literat
 - Supports queue and batch processing for repeated searches
 - Uses Playwright plus Chromium for live source browsing and extraction
 
+## Requirements
+
+- Node.js 18+
+- `npm`
+- Chromium for Playwright-driven sources
+- Optional: Gemini CLI for the interactive Gemini-first workflow
+
+## Dependencies
+
+This project does require local dependencies before you can run live or fixture searches.
+
+Required setup:
+
+```bash
+npm install
+npx playwright install chromium
+```
+
+What each command does:
+
+- `npm install` installs the Node.js runtime dependency declared in [package.json](D:/workspace/paper-ops/package.json), currently `playwright`
+- `npx playwright install chromium` installs the Chromium browser binary used by browser-driven sources such as ACM and Google Scholar
+
+Optional setup:
+
+- install `gemini` in your shell if you want the interactive Gemini CLI workflow
+- run `npm link` if you want to call `paper-ops` as a global local command instead of `node paper-ops.mjs`
+
 ## Quick Start
 
 ```bash
 git clone <your-repo-url>
 cd paper-ops
 
-# Install runtime dependencies
+# Install required dependencies
 npm install
 npx playwright install chromium
 
@@ -51,9 +79,11 @@ node paper-ops.mjs "\"knowledge graph\" AND screening" --fixtures
 ## Usage
 
 ```text
+node paper-ops.mjs ...       -> Direct local runtime
 gemini                       -> Open Gemini CLI in this repository
 paper-ops-gemini <command>   -> One-shot Gemini prompt through the paper-ops router
 paper-ops search "<query>"   -> Run a multi-source search and save artifacts
+paper-ops csv "<query>"      -> Export a deduplicated CSV from saved results for one search string
 paper-ops <query>            -> Treat raw query text as a search command
 paper-ops pipeline           -> Process queued searches from data/search-queue.md
 paper-ops tracker            -> Print the search history index
@@ -86,6 +116,32 @@ API keys are resolved in this order:
 1. process environment variables such as `SCOPUS_API_KEY` and `IEEE_API_KEY`
 2. local `.env`
 3. local `config/keys.txt` fallback
+
+## CSV Export
+
+If you already have saved JSON exports in `output/`, you can generate a deduplicated CSV for one specific search string:
+
+```bash
+paper-ops csv "\"software testing\" AND ai"
+```
+
+This export:
+
+- reads saved `.json` search results from `output/`
+- filters them by the requested search string
+- combines only matching runs
+- deduplicates the combined records
+- writes a CSV back into `output/`
+
+There are also two helper scripts:
+
+```bash
+node json_to_csv.mjs "\"software testing\" AND ai"
+node consolidate_all.mjs
+```
+
+- `json_to_csv.mjs` exports one CSV for one query
+- `consolidate_all.mjs` generates one CSV per distinct saved query
 
 ## Output Model
 
@@ -127,6 +183,7 @@ npm run search:smoke
 
 ## Notes
 
+- The dependency installation step is mandatory. Without `npm install`, the repo has no `playwright` package; without `npx playwright install chromium`, browser-driven sources will fail.
 - Scopus and IEEE now default to official API-backed retrieval when local keys are available.
 - `.env.example` is the tracked template. `.env` is local-only and ignored by git.
 - ACM and Google Scholar remain browser-driven.

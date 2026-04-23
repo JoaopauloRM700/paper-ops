@@ -6,10 +6,12 @@ import { fileURLToPath } from 'node:url';
 import { processBatchQueries } from './src/lib/batch.mjs';
 import { routeCliInput, renderHelpMenu } from './src/lib/cli.mjs';
 import { readSourcesConfig } from './src/lib/config.mjs';
+import { exportQueryResultsToCsv } from './src/lib/csv-export.mjs';
 import { processQueuedSearches } from './src/lib/pipeline.mjs';
 import { runSearchAndPersist } from './src/lib/search-runner.mjs';
 import { readSearchHistory } from './src/lib/tracker.mjs';
 import {
+  renderCsvExportSummary,
   renderSearchCollectionSummary,
   renderSearchHistorySummary,
   renderSearchRunSummary,
@@ -20,26 +22,31 @@ export async function main(argv = process.argv.slice(2), io = {}) {
   const routed = routeCliInput(argv);
   const projectRoot = resolve(routed.flags.projectRoot || process.cwd());
 
-  if (routed.mode === 'help' || !routed.query && routed.mode === 'search') {
+  if (routed.mode === 'help' || (!routed.query && (routed.mode === 'search' || routed.mode === 'csv'))) {
     stdout(renderHelpMenu());
     return { mode: 'help' };
   }
 
-  const config = readSourcesConfig(projectRoot);
-  if (routed.flags.fixtures) {
-    config.defaults.fixture_mode = true;
-    for (const [sourceName, sourceConfig] of Object.entries(config.sources)) {
-      sourceConfig.mode = sourceConfig.fixture ? 'fixture' : sourceConfig.mode;
-      if (sourceName === 'google_scholar' && !sourceConfig.fixture) {
-        sourceConfig.enabled = false;
+  const fixtureDir = new URL('./tests/fixtures/', import.meta.url);
+
+  function loadConfiguredSources() {
+    const config = readSourcesConfig(projectRoot);
+    if (routed.flags.fixtures) {
+      config.defaults.fixture_mode = true;
+      for (const [sourceName, sourceConfig] of Object.entries(config.sources)) {
+        sourceConfig.mode = sourceConfig.fixture ? 'fixture' : sourceConfig.mode;
+        if (sourceName === 'google_scholar' && !sourceConfig.fixture) {
+          sourceConfig.enabled = false;
+        }
       }
     }
-  }
 
-  const fixtureDir = new URL('./tests/fixtures/', import.meta.url);
+    return config;
+  }
 
   switch (routed.mode) {
     case 'search': {
+      const config = loadConfiguredSources();
       const result = await runSearchAndPersist({
         query: routed.query,
         config,
@@ -50,6 +57,7 @@ export async function main(argv = process.argv.slice(2), io = {}) {
       return result;
     }
     case 'pipeline': {
+      const config = loadConfiguredSources();
       const results = await processQueuedSearches({
         config,
         projectRoot,
@@ -58,6 +66,14 @@ export async function main(argv = process.argv.slice(2), io = {}) {
       stdout(renderSearchCollectionSummary('pipeline', results));
       return results;
     }
+    case 'csv': {
+      const result = exportQueryResultsToCsv({
+        projectRoot,
+        query: routed.query,
+      });
+      stdout(renderCsvExportSummary(result));
+      return result;
+    }
     case 'tracker':
       {
         const history = readSearchHistory(projectRoot);
@@ -65,6 +81,7 @@ export async function main(argv = process.argv.slice(2), io = {}) {
         return history;
       }
     case 'batch': {
+      const config = loadConfiguredSources();
       const results = await processBatchQueries({
         config,
         projectRoot,
