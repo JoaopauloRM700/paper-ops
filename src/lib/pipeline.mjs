@@ -27,13 +27,14 @@ export async function processQueuedSearches({ config, projectRoot, fixtureDir, n
   const queries = readPendingQueries(projectRoot);
   const results = [];
 
-  for (const query of queries) {
+  for (const [index, query] of queries.entries()) {
     const result = await runSearchAndPersist({
       query,
       config,
       projectRoot,
       fixtureDir,
       now,
+      artifactSuffix: `queue-${index + 1}`,
     });
     results.push(result);
   }

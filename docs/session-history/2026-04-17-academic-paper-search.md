@@ -485,3 +485,72 @@ Observed results:
 
 - CSV export tests passed
 - CLI routing and Gemini prompt tests passed for the new `csv` surface
+
+## README Credits and Google Scholar Pagination
+
+The repository then received two follow-up improvements:
+
+1. explicit credit in the README to the original base project
+2. Google Scholar pagination so the live source can better honor the configured result limit per source
+
+### Adjustments made
+
+1. Updated `README.md` to:
+   - credit [santifer/career-ops](https://github.com/santifer/career-ops) as the base project used to develop `paper-ops`
+   - explain that `defaults.per_source_limit` in `config/sources.yml` controls how many articles are returned per source
+   - document that Google Scholar now paginates until it reaches the configured limit or exhausts results
+2. Added paginated Google Scholar extraction logic in `src/lib/adapters/google-scholar.mjs`.
+3. Extended the browser runtime so one source search can reuse the same page while navigating successive result pages.
+4. Added a regression test proving Google Scholar collects records beyond the first 10-result page when the configured limit is higher.
+
+### Verification evidence
+
+```bash
+node --test --test-isolation=none tests/browser-adapters.test.mjs
+```
+
+Observed results:
+
+- Scholar pagination test passed
+- existing browser adapter tests still passed
+
+## Runtime Hardening: History Links, Per-Source Limits, and Artifact Collisions
+
+After the Scholar pagination work, a follow-up hardening pass implemented the next set of recommended runtime fixes.
+
+### Adjustments made
+
+1. `search-history.md` links are now written relative to the history file location instead of relative to the repo root.
+2. `verify.mjs` now validates history links relative to `data/search-history.md`, matching how markdown links actually resolve.
+3. `pipeline` and `batch` now append stable suffixes to artifact IDs so duplicate queries in the same run no longer overwrite each other's report/JSON files.
+4. Source-specific result limits are now supported:
+   - `defaults.per_source_limit` remains the global default
+   - `sources.<source>.limit` can override that default per source
+5. Google Scholar pagination now also accepts source-specific pagination controls:
+   - `max_pages`
+   - `page_delay_ms`
+6. README documentation was expanded to describe:
+   - where to credit the base project
+   - where to configure result limits
+   - how per-source overrides work
+   - how Scholar pagination is tuned
+
+### Verification evidence
+
+```bash
+node --test --test-isolation=none tests/search-runner.test.mjs
+node --test --test-isolation=none tests/browser-adapters.test.mjs
+node --test --test-isolation=none tests/pipeline-batch.test.mjs
+node --test --test-isolation=none tests/*.test.mjs
+node test-all.mjs
+npm run search:smoke
+```
+
+Observed results:
+
+- history-link regression tests passed
+- per-source Scholar limit test passed
+- pipeline and batch artifact-collision tests passed
+- full unit suite passed
+- `test-all.mjs` passed with the same 2 expected warnings
+- fixture smoke search still passed
