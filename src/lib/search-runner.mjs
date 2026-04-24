@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 
 import { runSourceSearch } from './adapters/index.mjs';
 import { createPlaywrightBrowserRuntime } from './browser-runtime.mjs';
@@ -19,9 +19,10 @@ function ensureProjectDirs(projectRoot) {
   }
 }
 
-function buildRunId(query, now) {
+function buildRunId(query, now, artifactSuffix = '') {
   const timestamp = now.toISOString().replace(/[:.]/g, '-');
-  return `${now.toISOString().slice(0, 10)}-${slugify(query) || 'search'}-${timestamp}`;
+  const suffix = slugify(artifactSuffix);
+  return `${now.toISOString().slice(0, 10)}-${slugify(query) || 'search'}-${timestamp}${suffix ? `-${suffix}` : ''}`;
 }
 
 function buildSourceCoverage(sourceResults) {
@@ -81,8 +82,9 @@ function ensureHistoryIndex(projectRoot) {
 }
 
 function appendHistoryEntry(historyPath, { now, query, summary, markdownPath, jsonPath }) {
-  const relativeMarkdown = markdownPath.replace(/\\/g, '/');
-  const relativeJson = jsonPath.replace(/\\/g, '/');
+  const historyDir = dirname(historyPath);
+  const relativeMarkdown = relative(historyDir, markdownPath).replace(/\\/g, '/');
+  const relativeJson = relative(historyDir, jsonPath).replace(/\\/g, '/');
   const current = readFileSync(historyPath, 'utf8');
   const nextLine = `| ${now.toISOString().slice(0, 10)} | ${query} | ${summary.totalRawRecords} | ${summary.uniqueRecords} | [report](${relativeMarkdown}) | [json](${relativeJson}) |\n`;
   writeFileSync(historyPath, `${current}${nextLine}`, 'utf8');
@@ -99,7 +101,6 @@ export async function runConfiguredSearch({
   browserFactory = createPlaywrightBrowserRuntime,
 }) {
   const retrievedAt = now.toISOString();
-  const limit = config.defaults.per_source_limit;
   const sourceNames = Object.keys(config.sources);
   const sourceResults = [];
   const hasLiveSource = sourceNames.some((sourceName) => config.sources[sourceName]?.enabled && config.sources[sourceName]?.mode === 'live');
@@ -118,14 +119,15 @@ export async function runConfiguredSearch({
 
   try {
     for (const sourceName of sourceNames) {
+      const sourceConfig = config.sources[sourceName];
       const result = await runSourceSearch(sourceName, {
         query,
-        sourceConfig: config.sources[sourceName],
+        sourceConfig,
         env,
         fixtureDir,
         retrievedAt,
         fetchImpl,
-        limit,
+        limit: sourceConfig.limit ?? config.defaults.per_source_limit,
         browserRuntime: activeBrowserRuntime,
         browserStartupError,
       });
@@ -166,9 +168,10 @@ export async function runSearchAndPersist({
   fetchImpl = fetch,
   browserRuntime,
   browserFactory,
+  artifactSuffix = '',
 }) {
   ensureProjectDirs(projectRoot);
-  const runId = buildRunId(query, now);
+  const runId = buildRunId(query, now, artifactSuffix);
   const searchResult = await runConfiguredSearch({
     query,
     config,
@@ -180,12 +183,14 @@ export async function runSearchAndPersist({
     browserFactory,
   });
 
-  const markdownPath = join('reports', `${runId}.md`);
-  const jsonPath = join('output', `${runId}.json`);
+  const markdownRelativePath = join('reports', `${runId}.md`);
+  const jsonRelativePath = join('output', `${runId}.json`);
+  const markdownPath = join(projectRoot, markdownRelativePath);
+  const jsonPath = join(projectRoot, jsonRelativePath);
   const historyPath = ensureHistoryIndex(projectRoot);
 
   writeFileSync(
-    join(projectRoot, markdownPath),
+    markdownPath,
     renderMarkdownReport({
       query,
       now,
@@ -196,7 +201,7 @@ export async function runSearchAndPersist({
   );
 
   writeFileSync(
-    join(projectRoot, jsonPath),
+    jsonPath,
     JSON.stringify(
       {
         query,
@@ -221,8 +226,8 @@ export async function runSearchAndPersist({
   return {
     ...searchResult,
     artifacts: {
-      markdownReport: join(projectRoot, markdownPath),
-      jsonExport: join(projectRoot, jsonPath),
+      markdownReport: markdownPath,
+      jsonExport: jsonPath,
       historyIndex: historyPath,
     },
   };

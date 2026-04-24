@@ -72,6 +72,8 @@ test('runSearchAndPersist writes markdown, json, and history artifacts from fixt
   assert.equal(json.records[1].pdf_available, true);
   assert.equal(json.records[1].pdf_url, 'https://dl.acm.org/doi/pdf/ACM-BETA');
   assert.match(history, /retrieval augmented generation/);
+  assert.match(history, /\[report\]\(\.\.\/reports\//);
+  assert.match(history, /\[json\]\(\.\.\/output\//);
 });
 
 test('runSearchAndPersist skips live browser sources when the browser runtime cannot start and still succeeds', async () => {

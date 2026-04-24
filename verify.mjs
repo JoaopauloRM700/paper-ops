@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export function verifyHistoryLinks(projectRoot = process.cwd(), io = {}) {
@@ -27,13 +27,13 @@ export function verifyHistoryLinks(projectRoot = process.cwd(), io = {}) {
     const reportMatch = reportLink.match(/\(([^)]+)\)/);
     const jsonMatch = jsonLink.match(/\(([^)]+)\)/);
 
-    if (reportMatch && !existsSync(join(projectRoot, reportMatch[1]))) {
+    if (reportMatch && !existsSync(resolve(dirname(historyPath), reportMatch[1]))) {
       stdout(`ERR Missing report artifact: ${reportMatch[1]}`);
       failures += 1;
       missing.push(reportMatch[1]);
     }
 
-    if (jsonMatch && !existsSync(join(projectRoot, jsonMatch[1]))) {
+    if (jsonMatch && !existsSync(resolve(dirname(historyPath), jsonMatch[1]))) {
       stdout(`ERR Missing json artifact: ${jsonMatch[1]}`);
       failures += 1;
       missing.push(jsonMatch[1]);

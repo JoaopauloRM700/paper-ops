@@ -37,6 +37,7 @@ export async function processBatchQueries({ config, projectRoot, fixtureDir, now
       projectRoot,
       fixtureDir,
       now,
+      artifactSuffix: `batch-${entry.id}`,
     }));
   }
 

@@ -2,6 +2,13 @@
 
 PaperOps is academic paper search tooling built for local, source-aware literature discovery. Run one search string across Scopus, IEEE, ACM, and Google Scholar, combine official API-backed retrieval with browser-driven extraction where needed, deduplicate the results, and save both a readable report and a machine-readable JSON export.
 
+This project was developed using [career-ops](https://github.com/santifer/career-ops) as its base. `paper-ops` reworks that operational foundation for academic paper discovery instead of job-search workflows.
+
+## Credits
+
+- Base project and operational inspiration: [santifer/career-ops](https://github.com/santifer/career-ops)
+- `paper-ops` adapts that foundation to a literature-search workflow centered on Scopus, IEEE, ACM, and Google Scholar
+
 ## What It Does
 
 - Accepts a raw Boolean or literature search string
@@ -102,10 +109,47 @@ bash batch/batch-runner.sh --fixtures
 
 The main config surface is `config/sources.yml`. It is stored as JSON-compatible YAML so it stays dependency-free and easy to edit.
 
+### Result limits per source
+
+The number of articles returned per source is controlled in [sources.yml](D:/workspace/paper-ops/config/sources.yml).
+
+You have two levels of control:
+
+- `defaults.per_source_limit` sets the global default used by every source
+- `sources.<source>.limit` optionally overrides that default for one specific source
+
+Example:
+
+```json
+{
+  "defaults": {
+    "per_source_limit": 20
+  },
+  "sources": {
+    "google_scholar": {
+      "limit": 30
+    }
+  }
+}
+```
+
+This limit is applied per source in each search run:
+
+- `scopus` returns up to that many records
+- `ieee` returns up to that many records
+- `acm` returns up to that many records
+- `google_scholar` now paginates across Scholar result pages until it reaches that limit or runs out of results
+
+For Google Scholar, you can also tune pagination behavior with:
+
+- `sources.google_scholar.max_pages`
+- `sources.google_scholar.page_delay_ms`
+
 Each source supports:
 
 - `enabled`
 - `mode`: `api`, `live`, or `fixture`
+- `limit` to override the global per-source result limit
 - `api_url` for official API-backed retrieval
 - `search_url` for live browser navigation
 - `fixture` for local fixture-backed testing
@@ -189,7 +233,9 @@ npm run search:smoke
    Elsevier Research Products APIs : https://dev.elsevier.com/
 - `.env.example` is the tracked template. `.env` is local-only and ignored by git.
 - ACM and Google Scholar remain browser-driven.
-- Google Scholar is still experimental and best-effort.
+- Google Scholar is still experimental and best-effort, but it now paginates through Scholar result pages to honor `per_source_limit` more accurately.
+- Pipeline and batch runs now avoid artifact-name collisions when the same query appears more than once in the same execution.
+- Search-history links are now written relative to `data/search-history.md`, so the markdown links resolve correctly when opened directly.
 - Fixture mode remains the primary verification path for tests and smoke checks.
 - `pdf_available` is `true` when a PDF link is found, `false` when a source explicitly indicates no PDF, and `null` when availability could not be confirmed.
 - Search runs now render a terminal summary with source coverage, top results, PDF status, and artifact paths in addition to saving `.md` and `.json` files.

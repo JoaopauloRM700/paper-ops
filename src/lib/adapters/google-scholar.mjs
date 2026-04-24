@@ -12,6 +12,11 @@ import {
 } from './common.mjs';
 
 const DEFAULT_SCHOLAR_URL = 'https://scholar.google.com/scholar';
+const SCHOLAR_PAGE_SIZE = 10;
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function mapScholarItem(item, query, retrievedAt) {
   const pdf = resolvePdfMetadata({
@@ -73,6 +78,91 @@ export async function extractGoogleScholarResultsFromPage(page, { query, limit, 
     retrievedAt,
     baseUrl: page.url?.() ?? DEFAULT_SCHOLAR_URL,
   });
+}
+
+function buildScholarNextPageUrl(currentUrl, query, nextStart) {
+  const url = new URL(currentUrl || DEFAULT_SCHOLAR_URL);
+  if (!url.searchParams.get('q')) {
+    url.searchParams.set('q', query);
+  }
+  url.searchParams.set('start', String(nextStart));
+  return url.toString();
+}
+
+function scholarRecordKey(record) {
+  if (record.source_id) {
+    return `id:${record.source_id}`;
+  }
+
+  if (record.url) {
+    return `url:${record.url}`;
+  }
+
+  return `title:${record.title}|year:${record.year ?? ''}`;
+}
+
+export async function extractPaginatedGoogleScholarResultsFromPage(page, {
+  query,
+  limit,
+  retrievedAt,
+  loadPage,
+  maxPages,
+  pageDelayMs,
+}) {
+  const collected = [];
+  const seenKeys = new Set();
+  let currentStart = Number(new URL(page.url?.() ?? DEFAULT_SCHOLAR_URL).searchParams.get('start') ?? '0');
+  let pagesVisited = 1;
+  const requestedMaxPages = Number(maxPages ?? Math.ceil(limit / SCHOLAR_PAGE_SIZE));
+  const effectiveMaxPages = Number.isFinite(requestedMaxPages) && requestedMaxPages > 0
+    ? Math.floor(requestedMaxPages)
+    : Math.ceil(limit / SCHOLAR_PAGE_SIZE);
+
+  while (collected.length < limit) {
+    const html = await page.content();
+    const pageRecords = extractGoogleScholarResultsFromHtml(html, {
+      query,
+      limit: limit - collected.length,
+      retrievedAt,
+      baseUrl: page.url?.() ?? DEFAULT_SCHOLAR_URL,
+    });
+
+    let newlyAdded = 0;
+    for (const record of pageRecords) {
+      const key = scholarRecordKey(record);
+      if (seenKeys.has(key)) {
+        continue;
+      }
+
+      seenKeys.add(key);
+      collected.push(record);
+      newlyAdded += 1;
+
+      if (collected.length >= limit) {
+        break;
+      }
+    }
+
+    if (
+      collected.length >= limit ||
+      pageRecords.length === 0 ||
+      newlyAdded === 0 ||
+      pageRecords.length < SCHOLAR_PAGE_SIZE ||
+      typeof loadPage !== 'function' ||
+      pagesVisited >= effectiveMaxPages
+    ) {
+      break;
+    }
+
+    currentStart += SCHOLAR_PAGE_SIZE;
+    if ((pageDelayMs ?? 0) > 0) {
+      await delay(pageDelayMs);
+    }
+    await loadPage(buildScholarNextPageUrl(page.url?.(), query, currentStart));
+    pagesVisited += 1;
+  }
+
+  return collected;
 }
 
 export function extractGoogleScholarResultsFromHtml(html, { query, limit, retrievedAt, baseUrl = DEFAULT_SCHOLAR_URL }) {
@@ -139,12 +229,14 @@ export async function runGoogleScholarSearch({ query, sourceConfig, fixtureDir, 
     const records = await browserRuntime.runSearch({
       sourceName: 'google_scholar',
       searchUrl: buildSearchUrl(sourceConfig.search_url ?? DEFAULT_SCHOLAR_URL, 'q', query),
-      extractor: extractGoogleScholarResultsFromPage,
+      extractor: extractPaginatedGoogleScholarResultsFromPage,
       query,
       limit,
       retrievedAt,
       waitForSelector: sourceConfig.wait_for_selector ?? 'div.gs_r.gs_or.gs_scl, #gs_res_ccl_mid .gs_r',
       settleTimeMs: sourceConfig.settle_time_ms ?? 2000,
+      maxPages: sourceConfig.max_pages ?? Math.ceil(limit / SCHOLAR_PAGE_SIZE),
+      pageDelayMs: sourceConfig.page_delay_ms ?? 0,
     });
     return completedSourceResult('google_scholar', records);
   } catch (error) {

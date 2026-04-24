@@ -148,13 +148,25 @@ for (const relativePath of [
   'plugins/paper-ops/skills/paper-ops/SKILL.md',
 ]) {
   const content = readFile(relativePath).toLowerCase();
-  const matches = bannedTokens.filter((token) => content.includes(token));
+  const matches = bannedTokens.filter((token) => {
+    if (relativePath === 'README.md' && token === 'career-ops') {
+      return false;
+    }
+
+    return content.includes(token);
+  });
   assert(
     matches.length === 0,
     `${relativePath} is paper-ops specific`,
     `${relativePath} still references stale terms: ${matches.join(', ')}`,
   );
 }
+
+assert(
+  readFile('README.md').includes('https://github.com/santifer/career-ops'),
+  'README.md credits the base career-ops project',
+  'README.md is missing the required credit to the base career-ops project',
+);
 
 console.log('\n4. Inline runtime checks');
 const routedExplicit = routeCliInput(['search', '"systematic review" AND rag']);

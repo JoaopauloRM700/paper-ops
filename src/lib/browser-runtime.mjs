@@ -30,12 +30,15 @@ export async function createPlaywrightBrowserRuntime(config = {}) {
       waitForSelector,
       settleTimeMs,
       beforeExtract,
+      maxPages,
+      pageDelayMs,
     }) {
       const page = await context.newPage();
       const timeoutMs = config.browser_navigation_timeout_ms ?? 30000;
+      const effectiveSettleTimeMs = settleTimeMs ?? config.browser_settle_time_ms;
 
-      try {
-        await page.goto(searchUrl, {
+      async function loadPage(url) {
+        await page.goto(url, {
           waitUntil: 'domcontentloaded',
           timeout: timeoutMs,
         });
@@ -54,15 +57,22 @@ export async function createPlaywrightBrowserRuntime(config = {}) {
           await beforeExtract(page);
         }
 
-        if ((settleTimeMs ?? config.browser_settle_time_ms ?? 0) > 0) {
-          await page.waitForTimeout(settleTimeMs ?? config.browser_settle_time_ms);
+        if ((effectiveSettleTimeMs ?? 0) > 0) {
+          await page.waitForTimeout(effectiveSettleTimeMs);
         }
+      }
+
+      try {
+        await loadPage(searchUrl);
 
         return await extractor(page, {
           sourceName,
           query,
           limit,
           retrievedAt,
+          loadPage,
+          maxPages,
+          pageDelayMs,
         });
       } finally {
         await page.close();
