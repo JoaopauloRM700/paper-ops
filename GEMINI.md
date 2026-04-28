@@ -26,6 +26,9 @@ Then use the router directly in the prompt:
 ```text
 paper-ops
 paper-ops search "\"systematic review\" AND rag"
+paper-ops fetch-pdfs "\"systematic review\" AND rag"
+paper-ops summarize "\"systematic review\" AND rag"
+paper-ops digest "\"systematic review\" AND rag"
 paper-ops csv "\"systematic review\" AND rag"
 paper-ops tracker
 paper-ops pipeline
@@ -46,6 +49,9 @@ node paper-ops-gemini.mjs search "\"systematic review\" AND rag" --fixtures
 | `paper-ops` | discovery | Show the command menu |
 | Raw query text | `search` | Run a multi-source search and save artifacts |
 | `paper-ops search <query>` | `search` | Explicit search |
+| `paper-ops fetch-pdfs <query>` | `fetch-pdfs` | Download accessible PDFs for one saved query |
+| `paper-ops summarize <query>` | `summarize` | Use PDF text or abstract fallback to write structured article summaries |
+| `paper-ops digest <query>` | `digest` | Generate a cross-article digest from structured summaries |
 | `paper-ops csv <query>` | `csv` | Export a deduplicated CSV from saved runs for one query |
 | `paper-ops pipeline` | `pipeline` | Process `data/search-queue.md` |
 | `paper-ops tracker` | `tracker` | Show `data/search-history.md` |
@@ -65,6 +71,13 @@ node paper-ops-gemini.mjs search "\"systematic review\" AND rag" --fixtures
   - `reports/*.md`
   - `output/*.json`
   - `data/search-history.md`
+- PDF and summary artifact outputs:
+  - `output/pdfs/*.pdf`
+  - `output/pdf-text/*.txt`
+  - `output/article-summaries/*.json`
+  - `reports/article-summaries/*.md`
+  - `output/digests/*.json`
+  - `reports/digests/*.md`
 - Verification commands:
   - `npm test`
   - `node doctor.mjs`

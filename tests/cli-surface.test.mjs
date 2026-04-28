@@ -65,4 +65,7 @@ test('buildGeminiPrompt canonicalizes router requests for Gemini CLI one-shot us
 
   assert.equal(buildGeminiPrompt(['tracker']), 'paper-ops tracker');
   assert.equal(buildGeminiPrompt(['csv', '"software testing" AND ai']), 'paper-ops csv "\\"software testing\\" AND ai"');
+  assert.equal(buildGeminiPrompt(['fetch-pdfs', '"software testing" AND ai']), 'paper-ops fetch-pdfs "\\"software testing\\" AND ai"');
+  assert.equal(buildGeminiPrompt(['summarize', '"software testing" AND ai']), 'paper-ops summarize "\\"software testing\\" AND ai"');
+  assert.equal(buildGeminiPrompt(['digest', '"software testing" AND ai']), 'paper-ops digest "\\"software testing\\" AND ai"');
 });

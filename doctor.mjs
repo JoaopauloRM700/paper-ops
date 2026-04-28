@@ -145,6 +145,19 @@ async function checkPlaywrightRuntime() {
   return createCheck(true, 'Playwright runtime and Chromium browser available');
 }
 
+async function checkPdfParsingRuntime() {
+  try {
+    await import('pdf-parse');
+    return createCheck(true, 'PDF parsing runtime available');
+  } catch {
+    return createCheck(
+      false,
+      'PDF parsing runtime available',
+      'Run `npm install` in the repo root to install pdf-parse before using summarize/digest.',
+    );
+  }
+}
+
 function checkBatchAssets() {
   const required = [
     join(projectRoot, 'batch', 'README.md'),
@@ -183,7 +196,7 @@ function checkAgentCli() {
     return {
       level: 'warn',
       label: `Gemini CLI not found in PATH (other agents detected: ${found.join(', ')})`,
-      hint: 'Install Gemini CLI to use `gemini` or `paper-ops-gemini`; the direct node runtime still works without it.',
+      hint: 'Install Gemini CLI to use `gemini`, `paper-ops-gemini`, or the summarize/digest workflows; the direct node runtime still works for search without it.',
     };
   }
 
@@ -196,6 +209,7 @@ export async function getDoctorChecks() {
     checkConfigFile(),
     checkApiCredentials(),
     await checkPlaywrightRuntime(),
+    await checkPdfParsingRuntime(),
     checkProjectDir('data'),
     checkProjectDir('reports'),
     checkProjectDir('output'),

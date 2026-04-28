@@ -1,6 +1,6 @@
 ---
 name: paper-ops
-description: Academic paper search workflow for this repository. Use when the user wants to search literature across configured sources, process queued searches, inspect saved search runs, or run batch searches.
+description: Academic paper search workflow for this repository. Use when the user wants to search literature, download PDFs, summarize saved results, inspect prior runs, or run queue/batch searches.
 ---
 
 # paper-ops
@@ -21,6 +21,9 @@ Treat the user's message after the `paper-ops` prefix as the mode selector.
 | `paper-ops` with no args | `discovery` |
 | Raw Boolean or literature query | `search` |
 | `paper-ops search <query>` | `search` |
+| `paper-ops fetch-pdfs <query>` | `fetch-pdfs` |
+| `paper-ops summarize <query>` | `summarize` |
+| `paper-ops digest <query>` | `digest` |
 | `paper-ops pipeline` | `pipeline` |
 | `paper-ops tracker` | `tracker` |
 | `paper-ops batch` | `batch` |
@@ -36,6 +39,9 @@ paper-ops -- Academic Paper Search
 
 Available prompts:
   paper-ops search "<query>"   -> Multi-source search + saved report + JSON
+  paper-ops fetch-pdfs "<query>" -> Download PDFs from saved results for one query
+  paper-ops summarize "<query>"  -> Extract PDF text + structured article summaries
+  paper-ops digest "<query>"     -> Consolidated digest across summarized articles
   paper-ops <query>            -> Treat raw query text as a search request
   paper-ops pipeline           -> Process queued searches from data/search-queue.md
   paper-ops tracker            -> Show saved search history

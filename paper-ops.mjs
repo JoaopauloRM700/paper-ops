@@ -4,14 +4,18 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { processBatchQueries } from './src/lib/batch.mjs';
+import { digestQueryArticles, fetchQueryPdfs, summarizeQueryArticles } from './src/lib/article-digest.mjs';
 import { routeCliInput, renderHelpMenu } from './src/lib/cli.mjs';
 import { readSourcesConfig } from './src/lib/config.mjs';
 import { exportQueryResultsToCsv } from './src/lib/csv-export.mjs';
 import { processQueuedSearches } from './src/lib/pipeline.mjs';
+import { resolveQueryInput } from './src/lib/research-profile.mjs';
 import { runSearchAndPersist } from './src/lib/search-runner.mjs';
 import { readSearchHistory } from './src/lib/tracker.mjs';
 import {
   renderCsvExportSummary,
+  renderPdfFetchSummary,
+  renderArticleSummaryWorkflowSummary,
   renderSearchCollectionSummary,
   renderSearchHistorySummary,
   renderSearchRunSummary,
@@ -23,6 +27,11 @@ export async function main(argv = process.argv.slice(2), io = {}) {
   const projectRoot = resolve(routed.flags.projectRoot || process.cwd());
 
   if (routed.mode === 'help' || (!routed.query && (routed.mode === 'search' || routed.mode === 'csv'))) {
+    stdout(renderHelpMenu());
+    return { mode: 'help' };
+  }
+
+  if (!routed.query && ['fetch-pdfs', 'summarize', 'digest'].includes(routed.mode)) {
     stdout(renderHelpMenu());
     return { mode: 'help' };
   }
@@ -47,8 +56,10 @@ export async function main(argv = process.argv.slice(2), io = {}) {
   switch (routed.mode) {
     case 'search': {
       const config = loadConfiguredSources();
+      const resolved = resolveQueryInput(routed.query, projectRoot);
       const result = await runSearchAndPersist({
-        query: routed.query,
+        query: resolved.query,
+        profile: resolved.profile,
         config,
         projectRoot,
         fixtureDir,
@@ -67,11 +78,39 @@ export async function main(argv = process.argv.slice(2), io = {}) {
       return results;
     }
     case 'csv': {
+      const resolved = resolveQueryInput(routed.query, projectRoot);
       const result = exportQueryResultsToCsv({
         projectRoot,
-        query: routed.query,
+        query: resolved.query,
       });
       stdout(renderCsvExportSummary(result));
+      return result;
+    }
+    case 'fetch-pdfs': {
+      const resolved = resolveQueryInput(routed.query, projectRoot);
+      const result = await fetchQueryPdfs({
+        projectRoot,
+        query: resolved.query,
+      });
+      stdout(renderPdfFetchSummary(result));
+      return result;
+    }
+    case 'summarize': {
+      const resolved = resolveQueryInput(routed.query, projectRoot);
+      const result = await summarizeQueryArticles({
+        projectRoot,
+        query: resolved.query,
+      });
+      stdout(renderArticleSummaryWorkflowSummary('summarize', result));
+      return result;
+    }
+    case 'digest': {
+      const resolved = resolveQueryInput(routed.query, projectRoot);
+      const result = await digestQueryArticles({
+        projectRoot,
+        query: resolved.query,
+      });
+      stdout(renderArticleSummaryWorkflowSummary('digest', result));
       return result;
     }
     case 'tracker':

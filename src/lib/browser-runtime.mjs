@@ -19,6 +19,40 @@ export async function createPlaywrightBrowserRuntime(config = {}) {
     },
   });
 
+  async function loadPage(page, {
+    url,
+    waitForSelector,
+    settleTimeMs,
+    beforeExtract,
+    navigationTimeoutMs,
+  }) {
+    const timeoutMs = navigationTimeoutMs ?? config.browser_navigation_timeout_ms ?? 30000;
+    const effectiveSettleTimeMs = settleTimeMs ?? config.browser_settle_time_ms;
+
+    await page.goto(url, {
+      waitUntil: 'domcontentloaded',
+      timeout: timeoutMs,
+    });
+
+    if (waitForSelector) {
+      await page.waitForSelector(waitForSelector, {
+        timeout: config.browser_result_timeout_ms ?? timeoutMs,
+      }).catch(() => {});
+    }
+
+    await page.waitForLoadState('networkidle', {
+      timeout: Math.min(timeoutMs, 5000),
+    }).catch(() => {});
+
+    if (typeof beforeExtract === 'function') {
+      await beforeExtract(page);
+    }
+
+    if ((effectiveSettleTimeMs ?? 0) > 0) {
+      await page.waitForTimeout(effectiveSettleTimeMs);
+    }
+  }
+
   return {
     async runSearch({
       sourceName,
@@ -34,45 +68,56 @@ export async function createPlaywrightBrowserRuntime(config = {}) {
       pageDelayMs,
     }) {
       const page = await context.newPage();
-      const timeoutMs = config.browser_navigation_timeout_ms ?? 30000;
-      const effectiveSettleTimeMs = settleTimeMs ?? config.browser_settle_time_ms;
-
-      async function loadPage(url) {
-        await page.goto(url, {
-          waitUntil: 'domcontentloaded',
-          timeout: timeoutMs,
+      async function loadSearchPage(url) {
+        await loadPage(page, {
+          url,
+          waitForSelector,
+          settleTimeMs,
+          beforeExtract,
         });
-
-        if (waitForSelector) {
-          await page.waitForSelector(waitForSelector, {
-            timeout: config.browser_result_timeout_ms ?? timeoutMs,
-          }).catch(() => {});
-        }
-
-        await page.waitForLoadState('networkidle', {
-          timeout: Math.min(timeoutMs, 5000),
-        }).catch(() => {});
-
-        if (typeof beforeExtract === 'function') {
-          await beforeExtract(page);
-        }
-
-        if ((effectiveSettleTimeMs ?? 0) > 0) {
-          await page.waitForTimeout(effectiveSettleTimeMs);
-        }
       }
 
       try {
-        await loadPage(searchUrl);
+        await loadSearchPage(searchUrl);
 
         return await extractor(page, {
           sourceName,
           query,
           limit,
           retrievedAt,
-          loadPage,
+          loadPage: loadSearchPage,
           maxPages,
           pageDelayMs,
+        });
+      } finally {
+        await page.close();
+      }
+    },
+    async extractArticlePage({
+      sourceName,
+      articleUrl,
+      extractor,
+      waitForSelector = 'body',
+      settleTimeMs,
+      beforeExtract,
+      navigationTimeoutMs,
+      contextData = {},
+    }) {
+      const page = await context.newPage();
+
+      try {
+        await loadPage(page, {
+          url: articleUrl,
+          waitForSelector,
+          settleTimeMs,
+          beforeExtract,
+          navigationTimeoutMs,
+        });
+
+        return await extractor(page, {
+          sourceName,
+          articleUrl,
+          ...contextData,
         });
       } finally {
         await page.close();

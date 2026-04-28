@@ -16,6 +16,8 @@
 .env
 SCOPUS_API_KEY=<your-scopus-key>
 IEEE_API_KEY=<your-ieee-key>
+PAPER_OPS_SUMMARY_CLI=gemini
+PAPER_OPS_SUMMARY_TIMEOUT_MS=180000
 ```
 
 You can also keep using `config/keys.txt` as a fallback, but `.env` is now the primary local configuration path.
@@ -35,6 +37,13 @@ Environment variable precedence is:
 node paper-ops.mjs search "\"systematic review\" AND rag" --fixtures
 ```
 
+8. If you want PDF reading and summaries, ensure Gemini CLI is available in your shell before running:
+
+```bash
+paper-ops summarize "\"systematic review\" AND rag"
+paper-ops digest "\"systematic review\" AND rag"
+```
+
 ## Gemini CLI Usage
 
 Interactive:
@@ -47,6 +56,9 @@ Then type:
 
 ```text
 paper-ops search "\"systematic review\" AND rag"
+paper-ops fetch-pdfs "\"systematic review\" AND rag"
+paper-ops summarize "\"systematic review\" AND rag"
+paper-ops digest "\"systematic review\" AND rag"
 paper-ops tracker
 ```
 
@@ -57,6 +69,23 @@ node paper-ops-gemini.mjs search "\"systematic review\" AND rag" --fixtures
 ```
 
 The local runtime still writes `reports/*.md` and `output/*.json`, but it now also renders a terminal summary with source coverage, top results, PDF availability, and artifact paths.
+
+For summary workflows, the runtime also writes:
+
+- `output/pdfs/*.pdf`
+- `output/pdf-text/*.txt`
+- `output/article-summaries/*.json`
+- `reports/article-summaries/*.md`
+- `output/digests/*.json`
+- `reports/digests/*.md`
+
+Summary fallback order:
+
+1. extracted PDF text
+2. saved article abstract already present in the search result
+3. abstract enriched from the article landing page
+
+When the landing page is too dynamic for a simple HTML fetch, the runtime can also fall back to Playwright on the article page and try lightweight interactions before extracting the abstract.
 
 ## Live Sources
 
