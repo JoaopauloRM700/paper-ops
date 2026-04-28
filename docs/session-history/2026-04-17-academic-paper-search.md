@@ -707,3 +707,27 @@ node doctor.mjs
 ```
 
 Result: doctor checks passed with one warning: Gemini CLI is not installed in PATH, so Gemini-backed `summarize` and `digest` workflows still need Gemini CLI or a `PAPER_OPS_SUMMARY_CLI` override.
+
+## Plain-Text Summary Artifacts and PDF Parser Compatibility
+
+Follow-up review found local changes that add plain-text per-article summaries and adapt PDF extraction for `pdf-parse` 2.x.
+
+### Adjustment made
+
+1. `summarizeQueryArticles` now records `summary.textPath` and exposes `summaryTextDirectory` in returned artifacts.
+2. Per-article summaries are written as:
+   - structured JSON in `output/article-summaries/*.json`
+   - plain text in `output/article-summaries/*.txt`
+   - Markdown in `reports/article-summaries/*.md`
+3. `extractTextFromPdfFile` now supports both older function-style `pdf-parse` exports and modern class-style `PDFParse` exports.
+4. README, setup, and architecture docs now list the plain-text summary artifact.
+5. `npm test` now uses Node's supported `--experimental-test-isolation=none` flag for the local Node.js runtime.
+
+### Verification evidence
+
+Focused tests were added for:
+
+- classic `pdf-parse` function exports
+- modern `PDFParse` class exports
+- namespace exports containing `PDFParse`
+- summary `.txt` artifact creation

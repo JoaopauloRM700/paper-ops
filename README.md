@@ -270,6 +270,7 @@ Derived PDF and summary artifacts:
 - `output/pdfs/<article-id>.pdf`
 - `output/pdf-text/<article-id>.txt`
 - `output/article-summaries/<article-id>.json`
+- `output/article-summaries/<article-id>.txt`
 - `reports/article-summaries/<article-id>.md`
 - `output/digests/<run-id>.json`
 - `reports/digests/<run-id>.md`

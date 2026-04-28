@@ -8,7 +8,7 @@
     "paper-ops-gemini": "./paper-ops-gemini.mjs"
   },
   "scripts": {
-    "test": "node --test --test-isolation=none tests/*.test.mjs",
+    "test": "node --test --experimental-test-isolation=none tests/*.test.mjs",
     "test:all": "node test-all.mjs",
     "doctor": "node doctor.mjs",
     "verify": "node verify.mjs",

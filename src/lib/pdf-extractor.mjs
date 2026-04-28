@@ -11,7 +11,38 @@ function normalizeExtractedText(text) {
 
 async function loadPdfParse() {
   const module = await import('pdf-parse');
-  return module.default ?? module;
+  return module.default ?? module.PDFParse ?? module;
+}
+
+function isClassConstructorCallError(error) {
+  return error instanceof TypeError
+    && /class constructor|cannot be invoked without 'new'|without new/i.test(error.message);
+}
+
+async function parsePdfBuffer(buffer, pdfParse) {
+  if (typeof pdfParse === 'function') {
+    try {
+      const parsed = await pdfParse(buffer);
+      return parsed?.text ?? '';
+    } catch (error) {
+      if (!isClassConstructorCallError(error)) {
+        throw error;
+      }
+    }
+
+    const parser = new pdfParse({ data: buffer });
+    const result = await parser.getText();
+    return result?.text ?? '';
+  }
+
+  const ParserClass = pdfParse?.PDFParse ?? pdfParse?.default?.PDFParse;
+  if (typeof ParserClass === 'function') {
+    const parser = new ParserClass({ data: buffer });
+    const result = await parser.getText();
+    return result?.text ?? '';
+  }
+
+  throw new Error('Unsupported pdf-parse export shape.');
 }
 
 export async function extractTextFromPdfFile(pdfPath, options = {}) {
@@ -21,8 +52,7 @@ export async function extractTextFromPdfFile(pdfPath, options = {}) {
   } = options;
   const buffer = readFileSync(pdfPath);
   const pdfParse = pdfParseImpl ?? await loadPdfParse();
-  const parsed = await pdfParse(buffer);
-  const normalizedText = normalizeExtractedText(parsed?.text ?? '');
+  const normalizedText = normalizeExtractedText(await parsePdfBuffer(buffer, pdfParse));
 
   if (normalizedText.length < minimumCharacters) {
     throw new Error('Extracted text is too short; the PDF may be scanned, empty, or unreadable.');

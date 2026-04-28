@@ -75,6 +75,7 @@ For summary workflows, the runtime also writes:
 - `output/pdfs/*.pdf`
 - `output/pdf-text/*.txt`
 - `output/article-summaries/*.json`
+- `output/article-summaries/*.txt`
 - `reports/article-summaries/*.md`
 - `output/digests/*.json`
 - `reports/digests/*.md`

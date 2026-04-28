@@ -175,13 +175,18 @@ test('summarizeQueryArticles extracts text and writes structured article summari
   assert.ok(existsSync(result.articles[0].text.path));
   assert.ok(existsSync(result.articles[0].summary.jsonPath));
   assert.ok(existsSync(result.articles[0].summary.markdownPath));
+  assert.ok(existsSync(result.articles[0].summary.textPath));
   assert.ok(existsSync(result.articles[1].text.path));
   assert.ok(existsSync(result.articles[1].summary.jsonPath));
+  assert.ok(existsSync(result.articles[1].summary.textPath));
   assert.ok(existsSync(result.articles[2].text.path));
   assert.ok(existsSync(result.articles[2].summary.jsonPath));
+  assert.ok(existsSync(result.articles[2].summary.textPath));
+  assert.equal(result.artifacts.summaryTextDirectory, join(projectRoot, 'output', 'article-summaries'));
 
   const summaryJson = JSON.parse(readFileSync(result.articles[0].summary.jsonPath, 'utf8'));
   const summaryMarkdown = readFileSync(result.articles[0].summary.markdownPath, 'utf8');
+  const summaryText = readFileSync(result.articles[0].summary.textPath, 'utf8');
   const abstractText = readFileSync(result.articles[1].text.path, 'utf8');
   const landingPageText = readFileSync(result.articles[2].text.path, 'utf8');
 
@@ -189,6 +194,8 @@ test('summarizeQueryArticles extracts text and writes structured article summari
   assert.equal(summaryJson.sections.key_findings.length, 2);
   assert.match(summaryMarkdown, /Objective/);
   assert.match(summaryMarkdown, /AI-Augmented Software Testing Pipelines/);
+  assert.match(summaryText, /ARTICLE SUMMARY/);
+  assert.match(summaryText, /AI-Augmented Software Testing Pipelines/);
   assert.match(abstractText, /No PDF was available/);
   assert.match(abstractText, /A paper without a direct PDF link/);
   assert.match(landingPageText, /landing page exposes an abstract/i);

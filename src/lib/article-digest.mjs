@@ -190,6 +190,41 @@ function buildSummarizeSummary(articles, digestGenerated = 0) {
   };
 }
 
+function buildArticleSummaryPlainText({ record, generatedAt, sections }) {
+  const findings = sections.key_findings.map((item) => `- ${item}`).join('\n') || '- unknown';
+  const limitations = sections.limitations.map((item) => `- ${item}`).join('\n') || '- unknown';
+  const keywords = sections.keywords.join(', ') || 'unknown';
+
+  return `ARTICLE SUMMARY: ${record.title}
+
+SOURCE: ${record.source}
+YEAR: ${record.year ?? 'unknown'}
+VENUE: ${record.venue || 'unknown'}
+GENERATED AT: ${generatedAt}
+
+OBJECTIVE:
+${sections.objective}
+
+METHOD:
+${sections.method}
+
+CONTEXT:
+${sections.dataset_or_context}
+
+KEY FINDINGS:
+${findings}
+
+LIMITATIONS:
+${limitations}
+
+CONTRIBUTION:
+${sections.contribution}
+
+KEYWORDS:
+${keywords}
+`;
+}
+
 function buildArticleSummaryMarkdown({ record, generatedAt, pdfPath, textPath, textSource, sections }) {
   const findings = sections.key_findings.map((item) => `- ${item}`).join('\n') || '- unknown';
   const limitations = sections.limitations.map((item) => `- ${item}`).join('\n') || '- unknown';
@@ -638,6 +673,7 @@ export async function summarizeQueryArticles({
         });
         const summaryJsonPath = join(directories.summaryJsonDir, `${article.articleId}.json`);
         const summaryMarkdownPath = join(directories.summaryMarkdownDir, `${article.articleId}.md`);
+        const summaryTextPath = join(directories.summaryJsonDir, `${article.articleId}.txt`);
         const summaryPayload = {
           articleId: article.articleId,
           query,
@@ -662,10 +698,20 @@ export async function summarizeQueryArticles({
           }),
           'utf8',
         );
+        writeFileSync(
+          summaryTextPath,
+          buildArticleSummaryPlainText({
+            record: article.record,
+            generatedAt: now.toISOString(),
+            sections,
+          }),
+          'utf8',
+        );
 
         article.summary.status = 'completed';
         article.summary.jsonPath = summaryJsonPath;
         article.summary.markdownPath = summaryMarkdownPath;
+        article.summary.textPath = summaryTextPath;
         article.summary.error = '';
         article.summary.sections = sections;
       } catch (error) {
@@ -686,6 +732,7 @@ export async function summarizeQueryArticles({
       ...fetchResult.artifacts,
       textDirectory: directories.textDir,
       summaryJsonDirectory: directories.summaryJsonDir,
+      summaryTextDirectory: directories.summaryJsonDir,
       summaryMarkdownDirectory: directories.summaryMarkdownDir,
     },
   };

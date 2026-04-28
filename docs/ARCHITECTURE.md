@@ -43,6 +43,7 @@ query string
 - `output/pdfs/*.pdf` -> cached PDFs for saved search results
 - `output/pdf-text/*.txt` -> extracted article text
 - `output/article-summaries/*.json` -> structured per-article summaries
+- `output/article-summaries/*.txt` -> plain-text per-article summaries
 - `reports/article-summaries/*.md` -> human-readable per-article summaries
 - `output/digests/*.json` -> structured cross-paper digests
 - `reports/digests/*.md` -> human-readable cross-paper digests
