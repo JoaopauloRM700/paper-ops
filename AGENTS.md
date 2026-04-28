@@ -13,6 +13,9 @@ Use this repo as a local academic paper discovery workspace.
 
 - `paper-ops` -> show the command menu
 - `paper-ops search <query>` -> run a saved search
+- `paper-ops fetch-pdfs <query>` -> download PDFs from saved results for one query
+- `paper-ops summarize <query>` -> extract PDF text and write structured article summaries
+- `paper-ops digest <query>` -> synthesize structured summaries into a search-level digest
 - `paper-ops csv <query>` -> export a CSV from saved runs for one search string
 - Raw Boolean/literature query text -> route to `search`
 - `paper-ops pipeline` -> process queued searches

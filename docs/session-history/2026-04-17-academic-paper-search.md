@@ -554,3 +554,138 @@ Observed results:
 - full unit suite passed
 - `test-all.mjs` passed with the same 2 expected warnings
 - fixture smoke search still passed
+
+## PDF Reading and Article Summary V1
+
+The next major capability added after search, CSV export, and digest hardening was the first end-to-end PDF reading and summary workflow.
+
+### Goal
+
+Move beyond metadata-only search results so the project can:
+
+1. download accessible PDFs from saved query results
+2. extract readable text from those PDFs
+3. generate one structured summary per article
+4. generate one cross-paper digest per saved search string
+
+### Implementation decisions
+
+1. Keep the search runtime as the first phase and run PDF/summary work as follow-up commands over saved query artifacts.
+2. Add three explicit router surfaces:
+   - `paper-ops fetch-pdfs <query>`
+   - `paper-ops summarize <query>`
+   - `paper-ops digest <query>`
+3. Treat Gemini CLI as the default summarization runtime for:
+   - structured per-article summaries
+   - cross-paper digest synthesis
+4. Require text-based PDFs only for V1.
+   - No OCR yet for scanned/image-only PDFs.
+5. Cache all downloaded and derived artifacts by stable article identity so reruns reuse existing files where possible.
+
+### New artifact surfaces
+
+- `output/pdfs/*.pdf`
+- `output/pdf-text/*.txt`
+- `output/article-summaries/*.json`
+- `reports/article-summaries/*.md`
+- `output/digests/*.json`
+- `reports/digests/*.md`
+
+### Implementation changes
+
+1. Added `src/lib/pdf-extractor.mjs` for PDF text extraction.
+2. Added `src/lib/article-summarizer.mjs` for:
+   - Gemini CLI prompt execution
+   - chunk-aware article summary synthesis
+   - cross-paper digest synthesis
+3. Added `src/lib/article-digest.mjs` for:
+   - resolving saved query exports
+   - PDF download/caching
+   - text extraction/caching
+   - per-article summary writing
+   - digest writing
+4. Extended the router and Gemini one-shot prompt builder for:
+   - `fetch-pdfs`
+   - `summarize`
+   - `digest`
+5. Extended terminal summaries to show PDF/text/summary workflow status and artifact directories.
+6. Added `.env.example` entries for:
+   - `PAPER_OPS_SUMMARY_CLI`
+   - `PAPER_OPS_SUMMARY_TIMEOUT_MS`
+7. Added `pdf-parse` as the PDF extraction dependency.
+8. Extended `.gitignore` for generated PDF/text/summary/digest artifacts.
+9. Updated:
+   - `README.md`
+   - `GEMINI.md`
+   - `AGENTS.md`
+   - `docs/SETUP.md`
+   - `docs/ARCHITECTURE.md`
+   - plugin skill metadata
+   - mode docs
+10. Updated `doctor.mjs` to validate that the PDF parsing runtime is installed.
+
+### Verification evidence
+
+Red-first coverage was added for:
+
+- new CLI mode routing
+- Gemini prompt canonicalization for the new commands
+- PDF fetch orchestration
+- article summary generation
+- cross-paper digest generation
+
+The following commands passed after implementation:
+
+```bash
+node --test --test-isolation=none tests/search-runner.test.mjs
+node --test --test-isolation=none tests/cli-surface.test.mjs
+node --test --test-isolation=none tests/article-digest.test.mjs
+node --test --test-isolation=none tests/*.test.mjs
+node doctor.mjs
+node verify.mjs
+node test-all.mjs
+npm run search:smoke
+```
+
+### Current limitations
+
+1. `summarize` and `digest` require Gemini CLI by default.
+2. OCR for scanned PDFs is still out of scope for this V1.
+3. Downloading a PDF still depends on a direct accessible `pdf_url` already being present in the saved search results.
+
+## Abstract Fallback for Summaries
+
+After the first PDF-summary V1 landed, a gap was identified: some valid article results do not expose a direct PDF link, but they still expose usable abstract text either:
+
+1. directly in the saved search/API record
+2. on the article landing page itself
+
+### Adjustment made
+
+The summary pipeline was broadened so it now chooses the best available text source in this order:
+
+1. extracted PDF text
+2. saved `abstract` from the normalized `PaperRecord`
+3. abstract enriched from the landing page HTML
+
+### Implementation changes
+
+1. `src/lib/article-digest.mjs` now:
+   - persists the `text.source` used for each article
+   - writes text artifacts even when the source is abstract-based rather than PDF-based
+   - extracts landing-page abstracts from common metadata and abstract blocks when no PDF and no saved abstract are available
+   - first tries a direct HTML fetch and then falls back to Playwright on the article page for dynamic content
+2. `terminal-ui.mjs` now surfaces whether article text came from:
+   - PDF
+   - saved abstract
+   - landing-page abstract
+3. README and setup/architecture docs were updated to reflect the fallback order.
+
+### Verification evidence
+
+New red-first tests now cover:
+
+- summarize from direct PDF text
+- summarize from saved record abstract
+- summarize from landing-page abstract
+- digest generation when the set mixes those text sources

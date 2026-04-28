@@ -1,6 +1,6 @@
 {
   "defaults": {
-    "per_source_limit": 10,
+    "per_source_limit": 20,
     "fixture_mode": false,
     "browser_headless": true,
     "browser_navigation_timeout_ms": 30000,

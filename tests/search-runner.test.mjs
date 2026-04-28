@@ -22,6 +22,24 @@ test('routeCliInput maps explicit search mode and raw boolean queries to search'
     query: '("systematic review" AND rag) AND ieee',
     flags: {},
   });
+
+  assert.deepEqual(routeCliInput(['fetch-pdfs', '"systematic review" AND rag']), {
+    mode: 'fetch-pdfs',
+    query: '"systematic review" AND rag',
+    flags: {},
+  });
+
+  assert.deepEqual(routeCliInput(['summarize', '"systematic review" AND rag']), {
+    mode: 'summarize',
+    query: '"systematic review" AND rag',
+    flags: {},
+  });
+
+  assert.deepEqual(routeCliInput(['digest', '"systematic review" AND rag']), {
+    mode: 'digest',
+    query: '"systematic review" AND rag',
+    flags: {},
+  });
 });
 
 test('runSearchAndPersist writes markdown, json, and history artifacts from fixture-backed sources', async () => {

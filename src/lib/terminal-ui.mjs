@@ -142,6 +142,112 @@ export function renderCsvExportSummary(result) {
   ].join('\n');
 }
 
+export function renderPdfFetchSummary(result) {
+  const rows = result.articles.slice(0, 5).map((article, index) => ({
+    index: String(index + 1),
+    source: formatSourceName(article.record.source),
+    pdf: article.pdf.status,
+    title: article.record.title || '-',
+  }));
+
+  const sections = [
+    'paper-ops fetch-pdfs complete',
+    '',
+    `Query: ${result.query}`,
+    `Matching runs: ${result.matchedFiles.length}`,
+    `Unique records: ${result.records.length}`,
+    `Downloaded PDFs: ${result.summary.downloaded}`,
+    `Cached PDFs: ${result.summary.cached}`,
+    `Skipped (no PDF): ${result.summary.skippedNoPdf}`,
+    `Failed downloads: ${result.summary.failed}`,
+    '',
+    'PDF status',
+    renderTable(
+      [
+        { key: 'index', label: '#', width: 2 },
+        { key: 'source', label: 'Source', width: 16 },
+        { key: 'pdf', label: 'PDF', width: 12 },
+        { key: 'title', label: 'Title', width: 54 },
+      ],
+      rows.length > 0
+        ? rows
+        : [{ index: '-', source: '-', pdf: '-', title: 'No saved records found' }],
+    ),
+    '',
+    'Artifacts',
+    `PDF directory: ${result.artifacts.pdfDirectory}`,
+  ];
+
+  return sections.join('\n');
+}
+
+export function renderArticleSummaryWorkflowSummary(modeName, result) {
+  const rows = result.articles.slice(0, 5).map((article, index) => ({
+    index: String(index + 1),
+    source: formatSourceName(article.record.source),
+    pdf: article.pdf.status,
+    text: article.text.status,
+    textSource: article.text.source || '-',
+    summary: article.summary.status,
+    title: article.record.title || '-',
+  }));
+  const sections = [
+    `paper-ops ${modeName} complete`,
+    '',
+    `Query: ${result.query}`,
+    `Matching runs: ${result.matchedFiles.length}`,
+    `Unique records: ${result.records.length}`,
+    `Downloaded PDFs: ${result.summary.downloaded}`,
+    `Cached PDFs: ${result.summary.cached}`,
+    `Text extracted: ${result.summary.textExtracted}`,
+    `Text cached: ${result.summary.textCached}`,
+    `Text from PDFs: ${result.summary.textFromPdf}`,
+    `Text from saved abstracts: ${result.summary.textFromRecordAbstract}`,
+    `Text from landing pages: ${result.summary.textFromLandingPageAbstract}`,
+    `Summaries completed: ${result.summary.summarized}`,
+    `Summary failures: ${result.summary.summaryFailed}`,
+  ];
+
+  if (result.summary.digestGenerated) {
+    sections.push(`Digest generated: ${result.summary.digestGenerated}`);
+  }
+
+  sections.push(
+    '',
+    'Article workflow status',
+    renderTable(
+      [
+        { key: 'index', label: '#', width: 2 },
+        { key: 'source', label: 'Source', width: 16 },
+        { key: 'pdf', label: 'PDF', width: 12 },
+        { key: 'text', label: 'Text', width: 10 },
+        { key: 'textSource', label: 'Text Source', width: 20 },
+        { key: 'summary', label: 'Summary', width: 10 },
+        { key: 'title', label: 'Title', width: 28 },
+      ],
+      rows.length > 0
+        ? rows
+        : [{ index: '-', source: '-', pdf: '-', text: '-', textSource: '-', summary: '-', title: 'No saved records found' }],
+    ),
+    '',
+    'Artifacts',
+    `PDF directory: ${result.artifacts.pdfDirectory}`,
+    `Text directory: ${result.artifacts.textDirectory}`,
+    `Summary JSON directory: ${result.artifacts.summaryJsonDirectory}`,
+    `Summary markdown directory: ${result.artifacts.summaryMarkdownDirectory}`,
+  );
+
+  if (result.artifacts.digestMarkdown) {
+    sections.push(`Digest markdown: ${result.artifacts.digestMarkdown}`);
+  }
+
+  if (result.artifacts.digestJson) {
+    sections.push(`Digest JSON: ${result.artifacts.digestJson}`);
+  }
+
+  return sections.join('\n');
+}
+
 export function renderSearchCollectionSummary(modeName, results) {
   if (results.length === 0) {
     return `paper-ops ${modeName}\n\nNo searches were processed.`;

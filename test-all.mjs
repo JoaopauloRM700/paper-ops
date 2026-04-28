@@ -111,6 +111,9 @@ for (const relativePath of [
   'config/sources.yml',
   'modes/_shared.md',
   'modes/search.md',
+  'modes/fetch-pdfs.md',
+  'modes/summarize.md',
+  'modes/digest.md',
   'modes/pipeline.md',
   'modes/tracker.md',
   'modes/batch.md',
@@ -181,6 +184,13 @@ assert(
   routedRaw.mode === 'search' && routedRaw.query.includes('systematic review'),
   'Raw query routing resolves to search',
   'Raw query routing did not resolve to search',
+);
+
+const routedDigest = routeCliInput(['digest', '"systematic review" AND rag']);
+assert(
+  routedDigest.mode === 'digest' && routedDigest.query === '"systematic review" AND rag',
+  'Digest CLI routing resolves correctly',
+  'Digest CLI routing did not resolve correctly',
 );
 
 const dedupResult = deduplicatePaperRecords([

@@ -9,4 +9,6 @@ Core expectations:
 - Normalize all matches into `PaperRecord`.
 - Deduplicate conservatively.
 - Save report and JSON artifacts for every successful run.
+- Prefer reusing saved search runs when the task is PDF download, article summarization, or digest generation.
+- Keep PDF, extracted-text, per-article-summary, and digest artifacts alongside the saved search history.
 - Keep Google Scholar experimental and best-effort.

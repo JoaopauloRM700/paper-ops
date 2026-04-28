@@ -11,13 +11,19 @@ This project was developed using [career-ops](https://github.com/santifer/career
 
 ## What It Does
 
-- Accepts a raw Boolean or literature search string
-- Queries enabled sources through a shared adapter contract
+- **Hybrid Input:** Accepts raw Boolean search strings or **Research Profile Markdown files**.
+- **Automated Query Generation:** Converts research profiles into robust Boolean search queries.
+- **Multi-Source Discovery:** Queries Scopus, IEEE, ACM, and Google Scholar through a shared adapter contract.
 - Uses official APIs for Scopus and IEEE when keys are configured
 - Uses browser-driven extraction for ACM and Google Scholar
 - Normalizes results into a common `PaperRecord` shape
 - Deduplicates by DOI, then source identity, then title plus year
 - Enriches each record with PDF availability plus a direct PDF URL when it can be detected
+- Downloads accessible PDFs from saved search results
+- Extracts text from downloaded PDFs when available
+- Falls back to saved abstracts or landing-page abstracts when a PDF is not available
+- Uses a fast HTML fetch first and can fall back to Playwright on the article page for dynamic abstracts
+- Generates structured per-article summaries and cross-paper digests (incorporates research profile context)
 - Saves one markdown report and one JSON export per run
 - Maintains a lightweight search history index
 - Supports queue and batch processing for repeated searches
@@ -49,6 +55,7 @@ What each command does:
 Optional setup:
 
 - install `gemini` in your shell if you want the interactive Gemini CLI workflow
+- install `gemini` if you want `summarize` and `digest`, because those flows use Gemini CLI as the summarization runtime by default
 - run `npm link` if you want to call `paper-ops` as a global local command instead of `node paper-ops.mjs`
 
 ## Quick Start
@@ -79,8 +86,43 @@ node paper-ops-gemini.mjs search "\"systematic review\" AND \"retrieval augmente
 # Direct local runtime usage
 node paper-ops.mjs search "\"systematic review\" AND \"retrieval augmented generation\"" --fixtures
 
+# Download PDFs and build summaries from saved results
+node paper-ops.mjs fetch-pdfs "\"systematic review\" AND \"retrieval augmented generation\""
+node paper-ops.mjs summarize "\"systematic review\" AND \"retrieval augmented generation\""
+node paper-ops.mjs digest "\"systematic review\" AND \"retrieval augmented generation\""
+
 # Or treat raw query text as a search command
 node paper-ops.mjs "\"knowledge graph\" AND screening" --fixtures
+```
+
+### Research Profiles (Markdown)
+
+You can perform searches using a structured Markdown file instead of a raw search string. This allows you to maintain research context and keywords in a single document.
+
+Example `my-research.md`:
+
+```md
+# Projeto/Pesquisa
+- Systematic Review: Automated Exploratory Testing by Intelligent Agents
+
+# Abordagem / Detalhe
+- Agents that navigate autonomously in web applications
+- Reinforcement Learning for state space exploration
+
+# Palavras-chave
+- autonomous UI exploration, intelligent agents testing
+- reinforcement learning testing, RL-based exploration
+```
+
+When you use a Markdown file as input:
+1. **Query Generation:** It automatically generates a Boolean query by OR-ing terms within a line and AND-ing the lines.
+2. **Contextual AI:** The "Project" and "Approach" details are passed to the AI during `summarize` and `digest` phases to provide more relevant insights.
+3. **Smart Naming:** Reports and search history use the project title from the Markdown file instead of the long search string.
+
+Usage:
+```bash
+node paper-ops.mjs search my-research.md
+node paper-ops.mjs summarize my-research.md
 ```
 
 ## Usage
@@ -90,6 +132,9 @@ node paper-ops.mjs ...       -> Direct local runtime
 gemini                       -> Open Gemini CLI in this repository
 paper-ops-gemini <command>   -> One-shot Gemini prompt through the paper-ops router
 paper-ops search "<query>"   -> Run a multi-source search and save artifacts
+paper-ops fetch-pdfs "<query>" -> Download PDFs from saved results for one query
+paper-ops summarize "<query>" -> Use PDF text or abstract fallback to write structured article summaries
+paper-ops digest "<query>"   -> Generate a consolidated digest for one saved query
 paper-ops csv "<query>"      -> Export a deduplicated CSV from saved results for one search string
 paper-ops <query>            -> Treat raw query text as a search command
 paper-ops pipeline           -> Process queued searches from data/search-queue.md
@@ -161,6 +206,11 @@ API keys are resolved in this order:
 2. local `.env`
 3. local `config/keys.txt` fallback
 
+Additional optional environment variables for summarization:
+
+- `PAPER_OPS_SUMMARY_CLI` to override the summarization command, default `gemini`
+- `PAPER_OPS_SUMMARY_TIMEOUT_MS` to change the summarization timeout
+
 ## CSV Export
 
 If you already have saved JSON exports in `output/`, you can generate a deduplicated CSV for one specific search string:
@@ -214,6 +264,39 @@ Saved artifacts:
 - `reports/<run-id>.md`
 - `output/<run-id>.json`
 - `data/search-history.md`
+
+Derived PDF and summary artifacts:
+
+- `output/pdfs/<article-id>.pdf`
+- `output/pdf-text/<article-id>.txt`
+- `output/article-summaries/<article-id>.json`
+- `reports/article-summaries/<article-id>.md`
+- `output/digests/<run-id>.json`
+- `reports/digests/<run-id>.md`
+
+## PDF Reading and Summaries
+
+The search runtime saves metadata first. PDF reading and summarization run as follow-up commands on one saved search string:
+
+```bash
+paper-ops fetch-pdfs "\"software testing\" AND ai"
+paper-ops summarize "\"software testing\" AND ai"
+paper-ops digest "\"software testing\" AND ai"
+```
+
+Workflow:
+
+- `fetch-pdfs` downloads direct PDF links already discovered in saved search results
+- `summarize` reuses cached PDFs when present, otherwise falls back to a saved abstract or an abstract enriched from the article landing page
+- `digest` reuses those article summaries and generates a cross-paper digest for the whole search string
+
+Current scope:
+
+- PDFs should be directly accessible and text-based when available
+- when no PDF is available, `summarize` falls back to the saved `abstract` field or a landing-page abstract
+- if a direct HTML fetch is not enough, the runtime can use Playwright on the article page to wait for rendering and try simple interactions such as expanding the abstract
+- scanned/image-only PDFs are not OCR-processed yet
+- `summarize` and `digest` require Gemini CLI by default unless you override `PAPER_OPS_SUMMARY_CLI`
 
 ## Validation
 

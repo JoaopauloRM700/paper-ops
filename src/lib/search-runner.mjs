@@ -38,7 +38,7 @@ function buildSourceCoverage(sourceResults) {
   );
 }
 
-function renderMarkdownReport({ query, now, summary, records }) {
+function renderMarkdownReport({ query, now, summary, records, profile }) {
   const formatPdfAvailability = (value) => {
     if (value === true) {
       return 'yes';
@@ -65,7 +65,15 @@ function renderMarkdownReport({ query, now, summary, records }) {
     .map((record, index) => `| ${index + 1} | ${record.source} | ${record.title} | ${record.year ?? '-'} | ${record.venue || '-'} | ${record.doi || '-'} | ${formatPdfAvailability(record.pdf_available)} | ${record.pdf_url || '-'} | ${record.url} |`)
     .join('\n');
 
-  return `# Academic Paper Search Report\n\n**Query:** ${query}\n**Generated At:** ${now.toISOString()}\n**Raw Records:** ${summary.totalRawRecords}\n**Unique Records:** ${records.length}\n**Duplicates Removed:** ${summary.duplicatesRemoved}\n\n## Source Coverage\n\n| Source | Status | Records | Reason |\n|---|---|---:|---|\n${coverageRows}\n\n## Results\n\n| # | Source | Title | Year | Venue | DOI | PDF Available | PDF URL | URL |\n|---|---|---|---:|---|---|---|---|---|\n${recordRows || '| - | - | No results | - | - | - | - | - | - |'}\n`;
+  let profileSection = '';
+  if (profile) {
+    profileSection = '\n## Research Profile\n\n';
+    for (const [section, lines] of Object.entries(profile)) {
+      profileSection += `### ${section}\n\n${lines.map(line => `- ${line}`).join('\n')}\n\n`;
+    }
+  }
+
+  return `# Academic Paper Search Report\n\n**Query:** ${query}\n**Generated At:** ${now.toISOString()}\n**Raw Records:** ${summary.totalRawRecords}\n**Unique Records:** ${records.length}\n**Duplicates Removed:** ${summary.duplicatesRemoved}\n${profileSection}\n## Source Coverage\n\n| Source | Status | Records | Reason |\n|---|---|---:|---|\n${coverageRows}\n\n## Results\n\n| # | Source | Title | Year | Venue | DOI | PDF Available | PDF URL | URL |\n|---|---|---|---:|---|---|---|---|---|\n${recordRows || '| - | - | No results | - | - | - | - | - | - |'}\n`;
 }
 
 function ensureHistoryIndex(projectRoot) {
@@ -81,12 +89,19 @@ function ensureHistoryIndex(projectRoot) {
   return historyPath;
 }
 
-function appendHistoryEntry(historyPath, { now, query, summary, markdownPath, jsonPath }) {
+function appendHistoryEntry(historyPath, { now, query, summary, markdownPath, jsonPath, profile }) {
   const historyDir = dirname(historyPath);
   const relativeMarkdown = relative(historyDir, markdownPath).replace(/\\/g, '/');
   const relativeJson = relative(historyDir, jsonPath).replace(/\\/g, '/');
   const current = readFileSync(historyPath, 'utf8');
-  const nextLine = `| ${now.toISOString().slice(0, 10)} | ${query} | ${summary.totalRawRecords} | ${summary.uniqueRecords} | [report](${relativeMarkdown}) | [json](${relativeJson}) |\n`;
+  
+  // Use project title if available in profile
+  let displayQuery = query;
+  if (profile && profile['Projeto/Pesquisa'] && profile['Projeto/Pesquisa'][0]) {
+    displayQuery = profile['Projeto/Pesquisa'][0];
+  }
+
+  const nextLine = `| ${now.toISOString().slice(0, 10)} | ${displayQuery} | ${summary.totalRawRecords} | ${summary.uniqueRecords} | [report](${relativeMarkdown}) | [json](${relativeJson}) |\n`;
   writeFileSync(historyPath, `${current}${nextLine}`, 'utf8');
 }
 
@@ -169,9 +184,16 @@ export async function runSearchAndPersist({
   browserRuntime,
   browserFactory,
   artifactSuffix = '',
+  profile = null,
 }) {
   ensureProjectDirs(projectRoot);
-  const runId = buildRunId(query, now, artifactSuffix);
+  
+  // If we have a profile, we might want a better slug for the runId than the long generated query
+  const slugBase = profile && profile['Projeto/Pesquisa'] && profile['Projeto/Pesquisa'][0] 
+    ? profile['Projeto/Pesquisa'][0] 
+    : query;
+    
+  const runId = buildRunId(slugBase, now, artifactSuffix);
   const searchResult = await runConfiguredSearch({
     query,
     config,
@@ -196,6 +218,7 @@ export async function runSearchAndPersist({
       now,
       summary: searchResult.summary,
       records: searchResult.records,
+      profile,
     }),
     'utf8',
   );
@@ -206,6 +229,7 @@ export async function runSearchAndPersist({
       {
         query,
         generatedAt: now.toISOString(),
+        profile,
         summary: searchResult.summary,
         records: searchResult.records,
       },
@@ -221,7 +245,9 @@ export async function runSearchAndPersist({
     summary: searchResult.summary,
     markdownPath,
     jsonPath,
+    profile,
   });
+
 
   return {
     ...searchResult,

@@ -83,6 +83,7 @@ export function readSavedSearchExports(projectRoot) {
           query: payload.query,
           queryKey: normalizeQuery(payload.query),
           generatedAt: payload.generatedAt ?? '',
+          profile: payload.profile ?? null,
           records: payload.records,
         }];
       } catch {

@@ -8,6 +8,12 @@ Thumbs.db
 reports/*.md
 output/*.json
 output/*.csv
+output/pdfs/
+output/pdf-text/
+output/article-summaries/
+output/digests/
+reports/article-summaries/
+reports/digests/
 data/*.md
 batch/batch-state.tsv
 batch/logs/
