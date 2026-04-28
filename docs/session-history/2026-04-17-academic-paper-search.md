@@ -689,3 +689,21 @@ New red-first tests now cover:
 - summarize from saved record abstract
 - summarize from landing-page abstract
 - digest generation when the set mixes those text sources
+
+## Local Main Sync and Doctor Check
+
+After syncing local `main` with `origin/main`, `node doctor.mjs` reported that the PDF parsing runtime was missing even though `pdf-parse` was declared in `package.json` and `package-lock.json`.
+
+### Correction made
+
+1. Ran `npm.cmd install` to install missing local dependencies.
+2. Confirmed `node_modules/pdf-parse`, `node_modules/@napi-rs/canvas`, and `node_modules/playwright` are present.
+3. Kept the npm lockfile update that restores the optional `@napi-rs/canvas` package entries required by the `pdf-parse` dependency tree.
+
+### Verification evidence
+
+```bash
+node doctor.mjs
+```
+
+Result: doctor checks passed with one warning: Gemini CLI is not installed in PATH, so Gemini-backed `summarize` and `digest` workflows still need Gemini CLI or a `PAPER_OPS_SUMMARY_CLI` override.
