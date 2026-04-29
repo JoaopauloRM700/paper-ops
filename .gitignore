@@ -12,8 +12,10 @@ output/pdfs/
 output/pdf-text/
 output/article-summaries/
 output/digests/
+output/answers/
 reports/article-summaries/
 reports/digests/
+reports/answers/
 data/*.md
 batch/batch-state.tsv
 batch/logs/

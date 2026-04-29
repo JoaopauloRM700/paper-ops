@@ -25,6 +25,8 @@ test('extractTextFromPdfFile supports classic pdf-parse function exports', async
 });
 
 test('extractTextFromPdfFile supports modern PDFParse class exports', async () => {
+  let destroyed = false;
+
   class ModernPdfParser {
     constructor({ data }) {
       assert.ok(Buffer.isBuffer(data));
@@ -35,6 +37,10 @@ test('extractTextFromPdfFile supports modern PDFParse class exports', async () =
         text: 'Modern parser text.\n\nEnough content for extraction.',
       };
     }
+
+    async destroy() {
+      destroyed = true;
+    }
   }
 
   const text = await extractTextFromPdfFile(createPdfFixture(), {
@@ -43,6 +49,7 @@ test('extractTextFromPdfFile supports modern PDFParse class exports', async () =
   });
 
   assert.equal(text, 'Modern parser text.\nEnough content for extraction.');
+  assert.equal(destroyed, true);
 });
 
 test('extractTextFromPdfFile supports namespace exports with PDFParse', async () => {
@@ -62,4 +69,30 @@ test('extractTextFromPdfFile supports namespace exports with PDFParse', async ()
   });
 
   assert.equal(text, 'Namespace parser text.\nEnough content for extraction.');
+});
+
+test('extractTextFromPdfFile prefers page text with page markers when available', async () => {
+  const text = await extractTextFromPdfFile(createPdfFixture(), {
+    minimumCharacters: 10,
+    pdfParseImpl: async () => ({
+      text: 'Flat text should not be used.',
+      pages: [
+        { num: 1, text: 'First page intro.' },
+        { num: 2, text: 'Second page evidence.' },
+      ],
+    }),
+  });
+
+  assert.equal(text, '--- Page 1 ---\nFirst page intro.\n--- Page 2 ---\nSecond page evidence.');
+});
+
+test('extractTextFromPdfFile repairs common UTF-8 mojibake from PDF text', async () => {
+  const text = await extractTextFromPdfFile(createPdfFixture(), {
+    minimumCharacters: 10,
+    pdfParseImpl: async () => ({
+      text: 'The book\u00e2\u20ac\u2122s chapter uses time-series examples and classifi-\ncation models.',
+    }),
+  });
+
+  assert.equal(text, 'The book\u2019s chapter uses time-series examples and classification models.');
 });

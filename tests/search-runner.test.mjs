@@ -40,6 +40,15 @@ test('routeCliInput maps explicit search mode and raw boolean queries to search'
     query: '"systematic review" AND rag',
     flags: {},
   });
+
+  assert.deepEqual(routeCliInput(['ask', '"systematic review" AND rag', '--question', 'What methods are used?', '--refresh-text']), {
+    mode: 'ask',
+    query: '"systematic review" AND rag',
+    flags: {
+      question: 'What methods are used?',
+      refreshText: true,
+    },
+  });
 });
 
 test('runSearchAndPersist writes markdown, json, and history artifacts from fixture-backed sources', async () => {

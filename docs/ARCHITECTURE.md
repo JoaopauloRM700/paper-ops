@@ -16,7 +16,7 @@ query string
   -> search history index
   -> optional PDF download + text extraction
   -> per-article structured summaries
-  -> optional cross-paper digest
+  -> optional cross-paper digest or question answer
 ```
 
 ## Core Modules
@@ -29,8 +29,8 @@ query string
 - `src/lib/adapters/*` -> source-specific live extraction and fixture normalization
 - `src/lib/search-runner.mjs` -> orchestration and artifact writing
 - `src/lib/pdf-extractor.mjs` -> PDF text extraction
-- `src/lib/article-summarizer.mjs` -> Gemini-driven structured article summaries and cross-paper synthesis
-- `src/lib/article-digest.mjs` -> PDF download, PDF/abstract text selection, per-article summaries, and digest orchestration
+- `src/lib/article-summarizer.mjs` -> Gemini-driven structured article summaries, cross-paper synthesis, and question answering
+- `src/lib/article-digest.mjs` -> PDF download, PDF/abstract text selection, per-article summaries, digest orchestration, and PDF-grounded answers
 - `src/lib/pipeline.mjs` -> queued searches
 - `src/lib/batch.mjs` -> TSV-backed batch input
 
@@ -47,6 +47,8 @@ query string
 - `reports/article-summaries/*.md` -> human-readable per-article summaries
 - `output/digests/*.json` -> structured cross-paper digests
 - `reports/digests/*.md` -> human-readable cross-paper digests
+- `output/answers/*.json` -> structured answers to research questions
+- `reports/answers/*.md` -> human-readable answers with supporting evidence
 
 ## Dedup Order
 
@@ -68,3 +70,4 @@ When duplicates are merged, the first retained record is enriched with any missi
   - saved abstract from the normalized `PaperRecord`
   - abstract enriched from the article landing page
 - Landing-page enrichment first tries a direct HTML fetch and then falls back to Playwright for dynamic pages, including lightweight interactions such as opening an abstract panel or dismissing cookie banners.
+- Question answering reuses the same PDF/abstract text layer and writes answer artifacts with supporting evidence.

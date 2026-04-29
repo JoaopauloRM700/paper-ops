@@ -6,15 +6,17 @@ import { routeCliInput } from './cli.mjs';
 export function buildGeminiPrompt(argv = []) {
   const routed = routeCliInput(argv);
   const fixturesFlag = routed.flags.fixtures ? ' --fixtures' : '';
+  const questionFlag = routed.flags.question ? ` --question ${JSON.stringify(routed.flags.question)}` : '';
+  const refreshTextFlag = routed.flags.refreshText ? ' --refresh-text' : '';
 
   if (routed.mode === 'help') {
     return 'paper-ops';
   }
 
-  if (['search', 'csv', 'fetch-pdfs', 'summarize', 'digest'].includes(routed.mode)) {
+  if (['search', 'csv', 'fetch-pdfs', 'summarize', 'digest', 'ask'].includes(routed.mode)) {
     return routed.query
-      ? `paper-ops ${routed.mode} ${JSON.stringify(routed.query)}${fixturesFlag}`
-      : `paper-ops${fixturesFlag}`;
+      ? `paper-ops ${routed.mode} ${JSON.stringify(routed.query)}${questionFlag}${refreshTextFlag}${fixturesFlag}`
+      : `paper-ops${questionFlag}${refreshTextFlag}${fixturesFlag}`;
   }
 
   return `paper-ops ${routed.mode}${fixturesFlag}`;

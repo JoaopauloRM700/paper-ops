@@ -4,7 +4,12 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { processBatchQueries } from './src/lib/batch.mjs';
-import { digestQueryArticles, fetchQueryPdfs, summarizeQueryArticles } from './src/lib/article-digest.mjs';
+import {
+  answerQueryFromArticles,
+  digestQueryArticles,
+  fetchQueryPdfs,
+  summarizeQueryArticles,
+} from './src/lib/article-digest.mjs';
 import { routeCliInput, renderHelpMenu } from './src/lib/cli.mjs';
 import { readSourcesConfig } from './src/lib/config.mjs';
 import { exportQueryResultsToCsv } from './src/lib/csv-export.mjs';
@@ -16,6 +21,7 @@ import {
   renderCsvExportSummary,
   renderPdfFetchSummary,
   renderArticleSummaryWorkflowSummary,
+  renderQuestionAnswerSummary,
   renderSearchCollectionSummary,
   renderSearchHistorySummary,
   renderSearchRunSummary,
@@ -31,7 +37,12 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     return { mode: 'help' };
   }
 
-  if (!routed.query && ['fetch-pdfs', 'summarize', 'digest'].includes(routed.mode)) {
+  if (!routed.query && ['fetch-pdfs', 'summarize', 'digest', 'ask'].includes(routed.mode)) {
+    stdout(renderHelpMenu());
+    return { mode: 'help' };
+  }
+
+  if (routed.mode === 'ask' && !routed.flags.question) {
     stdout(renderHelpMenu());
     return { mode: 'help' };
   }
@@ -100,6 +111,7 @@ export async function main(argv = process.argv.slice(2), io = {}) {
       const result = await summarizeQueryArticles({
         projectRoot,
         query: resolved.query,
+        refreshText: routed.flags.refreshText,
       });
       stdout(renderArticleSummaryWorkflowSummary('summarize', result));
       return result;
@@ -109,8 +121,20 @@ export async function main(argv = process.argv.slice(2), io = {}) {
       const result = await digestQueryArticles({
         projectRoot,
         query: resolved.query,
+        refreshText: routed.flags.refreshText,
       });
       stdout(renderArticleSummaryWorkflowSummary('digest', result));
+      return result;
+    }
+    case 'ask': {
+      const resolved = resolveQueryInput(routed.query, projectRoot);
+      const result = await answerQueryFromArticles({
+        projectRoot,
+        query: resolved.query,
+        question: routed.flags.question,
+        refreshText: routed.flags.refreshText,
+      });
+      stdout(renderQuestionAnswerSummary(result));
       return result;
     }
     case 'tracker':

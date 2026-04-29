@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
+  answerQueryFromArticles,
   digestQueryArticles,
   fetchQueryPdfs,
   summarizeQueryArticles,
@@ -311,4 +312,56 @@ test('summarizeQueryArticles falls back to Playwright article-page extraction wh
   assert.equal(browserCalls[0].articleUrl, 'https://example.org/gamma');
   assert.equal(result.articles[2].text.source, 'landing_page_abstract');
   assert.match(readFileSync(result.articles[2].text.path, 'utf8'), /Browser fallback abstract for the article page/);
+});
+
+test('answerQueryFromArticles answers a question from extracted article text and saves artifacts', async () => {
+  const projectRoot = createTempProjectRoot();
+
+  const result = await answerQueryFromArticles({
+    projectRoot,
+    query: QUERY,
+    question: 'What is the contribution?',
+    now: new Date('2026-04-27T15:00:00.000Z'),
+    fetchImpl: async (url) => {
+      if (url === 'https://example.org/alpha.pdf') {
+        return buildPdfResponse();
+      }
+
+      return new Response(
+        '<html><head><meta name="citation_abstract" content="This landing page exposes an abstract for a QA research article."></head><body></body></html>',
+        {
+          status: 200,
+          headers: {
+            'content-type': 'text/html',
+          },
+        },
+      );
+    },
+    extractTextImpl: async () =>
+      '--- Page 1 ---\nContribution: practical pipeline guidance for AI-assisted regression testing.',
+    questionAnswerer: async ({ question, articleTexts }) => {
+      assert.equal(question, 'What is the contribution?');
+      assert.equal(articleTexts.length, 3);
+      assert.match(articleTexts[0].text, /practical pipeline guidance/);
+      return {
+        answer: 'The papers support practical guidance for AI-assisted regression testing.',
+        confidence: 'high',
+        supporting_evidence: [
+          {
+            title: articleTexts[0].record.title,
+            page: 'Page 1',
+            quote: 'practical pipeline guidance for AI-assisted regression testing',
+          },
+        ],
+        limitations: [],
+      };
+    },
+  });
+
+  assert.equal(result.answer.confidence, 'high');
+  assert.equal(result.articleTexts.length, 3);
+  assert.ok(existsSync(result.artifacts.answerJson));
+  assert.ok(existsSync(result.artifacts.answerMarkdown));
+  assert.match(readFileSync(result.artifacts.answerMarkdown, 'utf8'), /Paper Question Answer/);
+  assert.match(readFileSync(result.artifacts.answerMarkdown, 'utf8'), /AI-assisted regression testing/);
 });

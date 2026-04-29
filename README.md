@@ -23,6 +23,7 @@ This project was developed using [career-ops](https://github.com/santifer/career
 - Extracts text from downloaded PDFs when available
 - Falls back to saved abstracts or landing-page abstracts when a PDF is not available
 - Uses a fast HTML fetch first and can fall back to Playwright on the article page for dynamic abstracts
+- Answers targeted questions using saved PDF text and abstract fallbacks
 - Generates structured per-article summaries and cross-paper digests (incorporates research profile context)
 - Saves one markdown report and one JSON export per run
 - Maintains a lightweight search history index
@@ -55,7 +56,7 @@ What each command does:
 Optional setup:
 
 - install `gemini` in your shell if you want the interactive Gemini CLI workflow
-- install `gemini` if you want `summarize` and `digest`, because those flows use Gemini CLI as the summarization runtime by default
+- install `gemini` if you want `summarize`, `digest`, and `ask`, because those flows use Gemini CLI as the AI runtime by default
 - run `npm link` if you want to call `paper-ops` as a global local command instead of `node paper-ops.mjs`
 
 ## Quick Start
@@ -135,6 +136,8 @@ paper-ops search "<query>"   -> Run a multi-source search and save artifacts
 paper-ops fetch-pdfs "<query>" -> Download PDFs from saved results for one query
 paper-ops summarize "<query>" -> Use PDF text or abstract fallback to write structured article summaries
 paper-ops digest "<query>"   -> Generate a consolidated digest for one saved query
+paper-ops ask "<query>" --question "<question>" -> Answer from saved PDF/abstract text
+paper-ops ask "<query>" --question "<question>" --refresh-text -> Regenerate cached extracted text first
 paper-ops csv "<query>"      -> Export a deduplicated CSV from saved results for one search string
 paper-ops <query>            -> Treat raw query text as a search command
 paper-ops pipeline           -> Process queued searches from data/search-queue.md
@@ -274,6 +277,8 @@ Derived PDF and summary artifacts:
 - `reports/article-summaries/<article-id>.md`
 - `output/digests/<run-id>.json`
 - `reports/digests/<run-id>.md`
+- `output/answers/<run-id>.json`
+- `reports/answers/<run-id>.md`
 
 ## PDF Reading and Summaries
 
@@ -283,6 +288,8 @@ The search runtime saves metadata first. PDF reading and summarization run as fo
 paper-ops fetch-pdfs "\"software testing\" AND ai"
 paper-ops summarize "\"software testing\" AND ai"
 paper-ops digest "\"software testing\" AND ai"
+paper-ops ask "\"software testing\" AND ai" --question "What methods are used?"
+paper-ops ask "\"software testing\" AND ai" --question "What methods are used?" --refresh-text
 ```
 
 Workflow:
@@ -290,14 +297,16 @@ Workflow:
 - `fetch-pdfs` downloads direct PDF links already discovered in saved search results
 - `summarize` reuses cached PDFs when present, otherwise falls back to a saved abstract or an abstract enriched from the article landing page
 - `digest` reuses those article summaries and generates a cross-paper digest for the whole search string
+- `ask` reuses or creates extracted text and answers one question from the available PDF/abstract evidence
+- add `--refresh-text` to regenerate cached `output/pdf-text/*.txt` files with the current extractor
 
 Current scope:
 
 - PDFs should be directly accessible and text-based when available
-- when no PDF is available, `summarize` falls back to the saved `abstract` field or a landing-page abstract
+- when no PDF is available, `summarize` and `ask` fall back to the saved `abstract` field or a landing-page abstract
 - if a direct HTML fetch is not enough, the runtime can use Playwright on the article page to wait for rendering and try simple interactions such as expanding the abstract
 - scanned/image-only PDFs are not OCR-processed yet
-- `summarize` and `digest` require Gemini CLI by default unless you override `PAPER_OPS_SUMMARY_CLI`
+- `summarize`, `digest`, and `ask` require Gemini CLI by default unless you override `PAPER_OPS_SUMMARY_CLI`
 
 ## Validation
 

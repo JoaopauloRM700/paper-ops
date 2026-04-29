@@ -53,6 +53,28 @@ function chunkText(text, options = {}) {
   return chunks;
 }
 
+function tokenizeForRetrieval(text) {
+  return new Set(
+    normalizeText(text)
+      .toLowerCase()
+      .split(/[^a-z0-9_]+/i)
+      .filter((token) => token.length >= 3),
+  );
+}
+
+function scoreEvidenceChunk(questionTokens, chunk) {
+  const chunkTokens = tokenizeForRetrieval(chunk.text);
+  let score = 0;
+
+  for (const token of questionTokens) {
+    if (chunkTokens.has(token)) {
+      score += 1;
+    }
+  }
+
+  return score;
+}
+
 function extractFirstJsonObject(text) {
   const source = String(text ?? '');
   const startIndex = source.indexOf('{');
@@ -118,6 +140,23 @@ function normalizeDigestSummary(payload) {
     common_methods: normalizeList(payload?.common_methods),
     evidence_gaps: normalizeList(payload?.evidence_gaps),
     recommended_next_reads: normalizeList(payload?.recommended_next_reads),
+  };
+}
+
+function normalizeQuestionAnswer(payload) {
+  const evidence = Array.isArray(payload?.supporting_evidence)
+    ? payload.supporting_evidence.map((entry) => ({
+        title: normalizeText(entry?.title) || 'unknown',
+        page: normalizeText(entry?.page) || 'unknown',
+        quote: normalizeText(entry?.quote) || 'unknown',
+      })).filter((entry) => entry.quote && entry.quote !== 'unknown')
+    : [];
+
+  return {
+    answer: normalizeText(payload?.answer) || 'I could not answer from the available paper text.',
+    confidence: normalizeText(payload?.confidence) || 'low',
+    supporting_evidence: evidence,
+    limitations: normalizeList(payload?.limitations),
   };
 }
 
@@ -241,6 +280,39 @@ ${query}
 
 Article summaries JSON:
 ${JSON.stringify(articleSummaries, null, 2)}`;
+}
+
+function buildQuestionPrompt({ question, evidenceChunks, profile }) {
+  let profileContext = '';
+  if (profile) {
+    profileContext = `\nResearch Context:
+Project: ${profile['Projeto/Pesquisa']?.[0] || 'unknown'}
+Approach: ${profile['Abordagem / Detalhe']?.join('; ') || 'unknown'}
+Target Keywords: ${profile['Palavras-chave']?.join(', ') || 'unknown'}\n`;
+  }
+
+  return `You are answering a research question using only the provided paper text. Return strict JSON only with this exact schema:
+{
+  "answer": "string",
+  "confidence": "high|medium|low",
+  "supporting_evidence": [
+    { "title": "string", "page": "string", "quote": "short exact quote from the provided text" }
+  ],
+  "limitations": ["string"]
+}
+
+Rules:
+- Answer in the same language as the question.
+- Use only the paper text provided below.
+- If the available text does not answer the question, say that clearly.
+- Include short supporting quotes and page markers when available.
+- Do not cite papers that are not present in the evidence chunks.${profileContext}
+
+Question:
+${question}
+
+Evidence chunks JSON:
+${JSON.stringify(evidenceChunks, null, 2)}`;
 }
 
 async function runCliJsonPrompt(prompt, options = {}) {
@@ -383,5 +455,65 @@ export async function summarizeSearchDigest(input, legacySummaries, legacyOption
 
   return normalizeDigestSummary(
     await runCliJsonPrompt(buildDigestPrompt({ query, articleSummaries, profile }), runner),
+  );
+}
+
+export async function answerQuestionFromArticleTexts(input, legacyQuestion, legacyOptions = {}) {
+  const {
+    question,
+    articleTexts,
+    runner,
+    profile,
+    chunking,
+  } = typeof input === 'object' && input !== null && 'question' in input
+    ? input
+    : {
+        question: legacyQuestion,
+        articleTexts: input,
+        profile: null,
+        ...legacyOptions,
+      };
+
+  const normalizedQuestion = normalizeText(question);
+  if (!normalizedQuestion) {
+    throw new Error('A question is required.');
+  }
+
+  const evidenceChunks = [];
+  for (const article of articleTexts ?? []) {
+    const chunks = chunkText(article.text, chunking);
+    for (const [index, chunk] of chunks.entries()) {
+      evidenceChunks.push({
+        title: article.record?.title || 'unknown',
+        source: article.record?.source || 'unknown',
+        year: article.record?.year ?? 'unknown',
+        textSource: article.textSource || 'unknown',
+        chunk: index + 1,
+        text: chunk,
+      });
+    }
+  }
+
+  if (evidenceChunks.length === 0) {
+    throw new Error('No article text was available to answer the question.');
+  }
+
+  const questionTokens = tokenizeForRetrieval(normalizedQuestion);
+  const maxEvidenceChunks = chunking?.maxEvidenceChunks ?? 12;
+  const selectedEvidenceChunks = evidenceChunks
+    .map((chunk) => ({
+      ...chunk,
+      relevanceScore: scoreEvidenceChunk(questionTokens, chunk),
+    }))
+    .sort((left, right) => right.relevanceScore - left.relevanceScore)
+    .slice(0, maxEvidenceChunks)
+    .map(({ relevanceScore, ...chunk }) => chunk);
+
+  return normalizeQuestionAnswer(
+    await runCliJsonPrompt(buildQuestionPrompt({
+      question: normalizedQuestion,
+      evidenceChunks: selectedEvidenceChunks,
+      profile,
+    }), runner),
   );
 }

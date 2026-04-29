@@ -153,7 +153,7 @@ async function checkPdfParsingRuntime() {
     return createCheck(
       false,
       'PDF parsing runtime available',
-      'Run `npm install` in the repo root to install pdf-parse before using summarize/digest.',
+      'Run `npm install` in the repo root to install pdf-parse before using summarize/digest/ask.',
     );
   }
 }
@@ -196,7 +196,7 @@ function checkAgentCli() {
     return {
       level: 'warn',
       label: `Gemini CLI not found in PATH (other agents detected: ${found.join(', ')})`,
-      hint: 'Install Gemini CLI to use `gemini`, `paper-ops-gemini`, or the summarize/digest workflows; the direct node runtime still works for search without it.',
+      hint: 'Install Gemini CLI to use `gemini`, `paper-ops-gemini`, or the summarize/digest/ask workflows; the direct node runtime still works for search without it.',
     };
   }
 

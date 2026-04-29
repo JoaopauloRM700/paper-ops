@@ -248,6 +248,45 @@ export function renderArticleSummaryWorkflowSummary(modeName, result) {
   return sections.join('\n');
 }
 
+export function renderQuestionAnswerSummary(result) {
+  const evidenceRows = result.answer.supporting_evidence.slice(0, 5).map((entry, index) => ({
+    index: String(index + 1),
+    page: entry.page || '-',
+    title: entry.title || '-',
+    quote: entry.quote || '-',
+  }));
+  const sections = [
+    'paper-ops ask complete',
+    '',
+    `Query: ${result.query}`,
+    `Question: ${result.question}`,
+    `Articles with text: ${result.articleTexts.length}`,
+    `Confidence: ${result.answer.confidence}`,
+    '',
+    'Answer',
+    result.answer.answer,
+    '',
+    'Supporting evidence',
+    renderTable(
+      [
+        { key: 'index', label: '#', width: 2 },
+        { key: 'page', label: 'Page', width: 10 },
+        { key: 'title', label: 'Title', width: 34 },
+        { key: 'quote', label: 'Quote', width: 58 },
+      ],
+      evidenceRows.length > 0
+        ? evidenceRows
+        : [{ index: '-', page: '-', title: '-', quote: 'No direct quote returned' }],
+    ),
+    '',
+    'Artifacts',
+    `Answer markdown: ${result.artifacts.answerMarkdown}`,
+    `Answer JSON: ${result.artifacts.answerJson}`,
+  ];
+
+  return sections.join('\n');
+}
+
 export function renderSearchCollectionSummary(modeName, results) {
   if (results.length === 0) {
     return `paper-ops ${modeName}\n\nNo searches were processed.`;

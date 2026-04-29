@@ -6,7 +6,11 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 
-import { summarizeArticleText, summarizeSearchDigest } from './article-summarizer.mjs';
+import {
+  answerQuestionFromArticleTexts,
+  summarizeArticleText,
+  summarizeSearchDigest,
+} from './article-summarizer.mjs';
 import { createPlaywrightBrowserRuntime } from './browser-runtime.mjs';
 import { readSourcesConfig } from './config.mjs';
 import { readSavedSearchExports } from './csv-export.mjs';
@@ -79,8 +83,10 @@ function ensureArtifactDirs(projectRoot) {
     textDir: join(projectRoot, 'output', 'pdf-text'),
     summaryJsonDir: join(projectRoot, 'output', 'article-summaries'),
     digestJsonDir: join(projectRoot, 'output', 'digests'),
+    answerJsonDir: join(projectRoot, 'output', 'answers'),
     summaryMarkdownDir: join(projectRoot, 'reports', 'article-summaries'),
     digestMarkdownDir: join(projectRoot, 'reports', 'digests'),
+    answerMarkdownDir: join(projectRoot, 'reports', 'answers'),
   };
 
   for (const directory of Object.values(directories)) {
@@ -329,6 +335,40 @@ ${articleSection}
 `;
 }
 
+function buildQuestionAnswerMarkdown({ query, question, generatedAt, answerPayload, articleTexts }) {
+  const evidence = answerPayload.supporting_evidence
+    .map((entry) => `- ${entry.title} (${entry.page}): "${entry.quote}"`)
+    .join('\n') || '- No direct supporting quote was returned.';
+  const limitations = answerPayload.limitations.map((item) => `- ${item}`).join('\n') || '- None reported.';
+  const sources = articleTexts
+    .map((entry, index) => `${index + 1}. ${entry.record.title} (${entry.record.year ?? 'unknown'}) - ${entry.textSource}`)
+    .join('\n') || 'No article text was available.';
+
+  return `# Paper Question Answer
+
+**Query:** ${query}
+**Question:** ${question}
+**Generated At:** ${generatedAt}
+**Confidence:** ${answerPayload.confidence}
+
+## Answer
+
+${answerPayload.answer}
+
+## Supporting Evidence
+
+${evidence}
+
+## Limitations
+
+${limitations}
+
+## Sources Consulted
+
+${sources}
+`;
+}
+
 function buildFallbackTextFromAbstract(record, abstractText, sourceLabel) {
   return [
     `Title: ${record.title || 'unknown'}`,
@@ -490,10 +530,11 @@ async function ensureArticleText({
   browserRuntimeResolver,
   sourceConfig,
   defaultConfig,
+  refreshText = false,
 }) {
   article.text.path = join(directories.textDir, `${article.articleId}.txt`);
 
-  if (existsSync(article.text.path)) {
+  if (!refreshText && existsSync(article.text.path)) {
     const cachedText = readFileSync(article.text.path, 'utf8');
     article.text.status = 'cached';
     article.text.characters = cachedText.length;
@@ -612,6 +653,7 @@ export async function summarizeQueryArticles({
   articleSummarizer = summarizeArticleText,
   browserRuntime,
   browserFactory = createPlaywrightBrowserRuntime,
+  refreshText = false,
 } = {}) {
   const fetchResult = await fetchQueryPdfs({
     projectRoot,
@@ -748,6 +790,7 @@ export async function digestQueryArticles({
   digestSummarizer = summarizeSearchDigest,
   browserRuntime,
   browserFactory = createPlaywrightBrowserRuntime,
+  refreshText = false,
 } = {}) {
   const summaryResult = await summarizeQueryArticles({
     projectRoot,
@@ -758,6 +801,7 @@ export async function digestQueryArticles({
     articleSummarizer,
     browserRuntime,
     browserFactory,
+    refreshText,
   });
   const directories = ensureArtifactDirs(projectRoot);
   const successfulArticles = summaryResult.articles.filter((article) => article.summary.status === 'completed');
@@ -817,5 +861,130 @@ export async function digestQueryArticles({
     },
     crossPaperSummary,
     articleSummaries,
+  };
+}
+
+export async function answerQueryFromArticles({
+  projectRoot,
+  query,
+  question,
+  now = new Date(),
+  fetchImpl = fetch,
+  extractTextImpl = extractTextFromPdfFile,
+  questionAnswerer = answerQuestionFromArticleTexts,
+  browserRuntime,
+  browserFactory = createPlaywrightBrowserRuntime,
+  refreshText = false,
+} = {}) {
+  const fetchResult = await fetchQueryPdfs({
+    projectRoot,
+    query,
+    fetchImpl,
+  });
+  const directories = ensureArtifactDirs(projectRoot);
+  const runtimeConfig = resolveDigestConfig(projectRoot);
+  let ownedBrowserRuntime = null;
+  const articleTexts = [];
+
+  async function getBrowserRuntime() {
+    if (browserRuntime) {
+      return browserRuntime;
+    }
+
+    if (!ownedBrowserRuntime) {
+      ownedBrowserRuntime = await browserFactory(runtimeConfig.defaults);
+    }
+
+    return ownedBrowserRuntime;
+  }
+
+  try {
+    for (const article of fetchResult.articles) {
+      const sourceConfig = runtimeConfig.sources?.[article.record.source] ?? {};
+      try {
+        const text = await ensureArticleText({
+          article,
+          directories,
+          query,
+          projectRoot,
+          fetchImpl,
+          extractTextImpl,
+          browserRuntimeResolver: getBrowserRuntime,
+          sourceConfig,
+          defaultConfig: runtimeConfig.defaults,
+          refreshText,
+        });
+        articleTexts.push({
+          articleId: article.articleId,
+          record: article.record,
+          text,
+          textPath: article.text.path,
+          textSource: article.text.source,
+        });
+      } catch (error) {
+        article.text.status = 'failed';
+        article.text.error = error instanceof Error ? error.message : String(error);
+        article.text.path = '';
+      }
+    }
+  } finally {
+    if (ownedBrowserRuntime) {
+      await ownedBrowserRuntime.close();
+    }
+  }
+
+  if (articleTexts.length === 0) {
+    throw new Error('No PDF text or abstract text was available to answer the question.');
+  }
+
+  const answerPayload = await questionAnswerer({
+    question,
+    articleTexts,
+    projectRoot,
+    query,
+    profile: fetchResult.profile,
+  });
+  const runId = buildRunId(query, now, 'answer');
+  const answerJsonPath = join(directories.answerJsonDir, `${runId}.json`);
+  const answerMarkdownPath = join(directories.answerMarkdownDir, `${runId}.md`);
+  const payload = {
+    query,
+    question,
+    generatedAt: now.toISOString(),
+    matchedFiles: fetchResult.matchedFiles,
+    answer: answerPayload,
+    articleTexts: articleTexts.map((entry) => ({
+      articleId: entry.articleId,
+      record: entry.record,
+      textPath: entry.textPath,
+      textSource: entry.textSource,
+    })),
+  };
+
+  writeFileSync(answerJsonPath, JSON.stringify(payload, null, 2), 'utf8');
+  writeFileSync(
+    answerMarkdownPath,
+    buildQuestionAnswerMarkdown({
+      query,
+      question,
+      generatedAt: now.toISOString(),
+      answerPayload,
+      articleTexts,
+    }),
+    'utf8',
+  );
+
+  return {
+    ...fetchResult,
+    question,
+    summary: buildSummarizeSummary(fetchResult.articles),
+    artifacts: {
+      ...fetchResult.artifacts,
+      textDirectory: directories.textDir,
+      answerJson: answerJsonPath,
+      answerMarkdown: answerMarkdownPath,
+    },
+    answer: answerPayload,
+    articleTexts,
   };
 }

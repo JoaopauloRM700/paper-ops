@@ -37,11 +37,13 @@ Environment variable precedence is:
 node paper-ops.mjs search "\"systematic review\" AND rag" --fixtures
 ```
 
-8. If you want PDF reading and summaries, ensure Gemini CLI is available in your shell before running:
+8. If you want PDF reading, summaries, digests, or answers, ensure Gemini CLI is available in your shell before running:
 
 ```bash
 paper-ops summarize "\"systematic review\" AND rag"
 paper-ops digest "\"systematic review\" AND rag"
+paper-ops ask "\"systematic review\" AND rag" --question "What methods are used?"
+paper-ops ask "\"systematic review\" AND rag" --question "What methods are used?" --refresh-text
 ```
 
 ## Gemini CLI Usage
@@ -59,6 +61,8 @@ paper-ops search "\"systematic review\" AND rag"
 paper-ops fetch-pdfs "\"systematic review\" AND rag"
 paper-ops summarize "\"systematic review\" AND rag"
 paper-ops digest "\"systematic review\" AND rag"
+paper-ops ask "\"systematic review\" AND rag" --question "What methods are used?"
+paper-ops ask "\"systematic review\" AND rag" --question "What methods are used?" --refresh-text
 paper-ops tracker
 ```
 
@@ -79,6 +83,8 @@ For summary workflows, the runtime also writes:
 - `reports/article-summaries/*.md`
 - `output/digests/*.json`
 - `reports/digests/*.md`
+- `output/answers/*.json`
+- `reports/answers/*.md`
 
 Summary fallback order:
 

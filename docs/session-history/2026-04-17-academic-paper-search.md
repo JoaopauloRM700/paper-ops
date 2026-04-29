@@ -731,3 +731,32 @@ Focused tests were added for:
 - modern `PDFParse` class exports
 - namespace exports containing `PDFParse`
 - summary `.txt` artifact creation
+
+## PDF-Grounded Question Answering
+
+The next gap identified was that extracted PDF text needed to support direct research questions, not only pre-baked summaries and digests.
+
+### Adjustment made
+
+1. Improved PDF text extraction so it:
+   - preserves page markers when `pdf-parse` returns page-level text
+   - repairs common UTF-8 mojibake such as `â€™`
+   - joins line-hyphenated words across PDF line breaks
+   - calls `destroy()` on modern `PDFParse` parser instances
+2. Added `paper-ops ask <query> --question <question>`.
+3. The ask workflow reuses or creates the same PDF/abstract text artifacts used by `summarize`.
+4. Answers are generated only from available PDF/abstract evidence and saved to:
+   - `output/answers/*.json`
+   - `reports/answers/*.md`
+5. Added `--refresh-text` so old cached extracted text can be regenerated with the current extractor before `summarize`, `digest`, or `ask`.
+6. Documentation, mode docs, CLI help, and agent instructions now include the `ask` command.
+
+### Verification evidence
+
+Focused tests cover:
+
+- page-marker extraction
+- mojibake repair
+- parser cleanup with `destroy()`
+- `ask` CLI routing
+- answer artifact creation from extracted text
