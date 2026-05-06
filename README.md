@@ -62,7 +62,7 @@ Optional setup:
 ## Quick Start
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/JoaopauloRM700/paper-ops.git
 cd paper-ops
 
 # Install required dependencies
