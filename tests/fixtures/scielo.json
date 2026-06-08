@@ -1,0 +1,26 @@
+{
+  "items": [
+    {
+      "id": "S0100-879X2024000100001",
+      "title": "Open Science Workflows for Evidence Synthesis",
+      "authors": ["Maria Silva", "Joao Souza"],
+      "year": "2024",
+      "venue": "Brazilian Journal of Research Methods",
+      "doi": "10.1590/0100-879X2024000100001",
+      "url": "https://www.scielo.br/j/bjrm/a/scielo-alpha/",
+      "abstract": "This article evaluates open science workflows for reproducible evidence synthesis.",
+      "pdf_available": true,
+      "pdf_url": "https://www.scielo.br/j/bjrm/a/scielo-alpha/?format=pdf"
+    },
+    {
+      "id": "S0100-879X2023000200002",
+      "title": "Machine Learning Review Practices in Latin America",
+      "authors": ["Ana Costa"],
+      "year": "2023",
+      "venue": "Revista de Ciencia Aberta",
+      "doi": "10.1590/0100-879X2023000200002",
+      "url": "https://www.scielo.br/j/rca/a/scielo-beta/",
+      "abstract": "A regional survey of machine learning review practices."
+    }
+  ]
+}

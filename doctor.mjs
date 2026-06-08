@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { readSourcesConfig } from './src/lib/config.mjs';
 
 const projectRoot = dirname(fileURLToPath(import.meta.url));
-const requiredSourceKeys = ['scopus', 'ieee', 'acm', 'google_scholar'];
+const requiredSourceKeys = ['scopus', 'ieee', 'acm', 'google_scholar', 'scielo', 'web_of_science'];
 
 function commandExists(name) {
   const resolver = process.platform === 'win32' ? 'where' : 'which';
@@ -78,7 +78,7 @@ function checkApiCredentials() {
   try {
     const parsed = readSourcesConfig(projectRoot);
     const missingApiKeys = Object.entries(parsed.sources ?? {})
-      .filter(([, sourceConfig]) => sourceConfig.enabled && sourceConfig.mode === 'api' && !sourceConfig.api_key)
+      .filter(([, sourceConfig]) => sourceConfig.enabled && sourceConfig.mode === 'api' && sourceConfig.requires_api_key !== false && !sourceConfig.api_key)
       .map(([sourceName]) => sourceName);
 
     if (missingApiKeys.length === 0) {
@@ -110,7 +110,7 @@ function checkProjectDir(name) {
 }
 
 function checkFixtures() {
-  const missing = ['scopus.json', 'ieee.json', 'acm.json', 'scholar.json']
+  const missing = ['scopus.json', 'ieee.json', 'acm.json', 'scholar.json', 'scielo.json', 'web-of-science.json']
     .map((file) => join(projectRoot, 'tests', 'fixtures', file))
     .filter((path) => !existsSync(path));
 

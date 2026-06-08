@@ -16,6 +16,7 @@
 .env
 SCOPUS_API_KEY=<your-scopus-key>
 IEEE_API_KEY=<your-ieee-key>
+WEB_OF_SCIENCE_API_KEY=<your-web-of-science-key>
 PAPER_OPS_SUMMARY_CLI=gemini
 PAPER_OPS_SUMMARY_TIMEOUT_MS=180000
 ```
@@ -100,3 +101,6 @@ When the landing page is too dynamic for a simple HTML fetch, the runtime can al
 - IEEE: official IEEE Xplore Metadata API when `mode` is `api`, browser extraction otherwise
 - ACM: browser-driven results extraction from the ACM Digital Library
 - Google Scholar: experimental browser-driven extraction and best-effort only
+- SciELO: free JSON API from SciELO Search when `mode` is `api`, browser extraction otherwise
+- Web of Science: official Clarivate API when `mode` is `api`; set `WEB_OF_SCIENCE_API_KEY` or `WOS_API_KEY`
+- Web of Science raw search strings are wrapped as `TS=(...)`; set `sources.web_of_science.raw_query` to `true` to pass advanced Web of Science syntax unchanged

@@ -12,6 +12,7 @@ import {
   extractGoogleScholarResultsFromPage,
   extractPaginatedGoogleScholarResultsFromPage,
 } from '../src/lib/adapters/google-scholar.mjs';
+import { extractScieloResultsFromPage } from '../src/lib/adapters/scielo.mjs';
 import { extractScopusResultsFromPage } from '../src/lib/adapters/scopus.mjs';
 
 const FIXTURE_DIR = new URL('./fixtures/', import.meta.url);
@@ -73,7 +74,7 @@ function createFixtureBrowserRuntime(htmlMap) {
   };
 }
 
-test('browser extractors normalize Scopus, IEEE, ACM, and Scholar result pages', async () => {
+test('browser extractors normalize Scopus, IEEE, ACM, Scholar, and SciELO result pages', async () => {
   const scopusRecords = await extractScopusResultsFromPage(
     createFixturePage('scopus-search.html', 'https://www.scopus.com/results/results.uri'),
     {
@@ -106,6 +107,14 @@ test('browser extractors normalize Scopus, IEEE, ACM, and Scholar result pages',
       retrievedAt: RETRIEVED_AT,
     },
   );
+  const scieloRecords = await extractScieloResultsFromPage(
+    createFixturePage('scielo-search.html', 'https://search.scielo.org/'),
+    {
+      query: '"systematic review" AND rag',
+      limit: 5,
+      retrievedAt: RETRIEVED_AT,
+    },
+  );
 
   assert.equal(scopusRecords[0].source, 'scopus');
   assert.equal(scopusRecords[0].doi, '10.1000/alpha');
@@ -118,6 +127,10 @@ test('browser extractors normalize Scopus, IEEE, ACM, and Scholar result pages',
   assert.equal(acmRecords[0].pdf_url, 'https://dl.acm.org/doi/pdf/ACM-BETA');
   assert.equal(scholarRecords[0].authors[0], 'Donald Knuth');
   assert.equal(scholarRecords[0].pdf_available, null);
+  assert.equal(scieloRecords[0].source, 'scielo');
+  assert.equal(scieloRecords[0].doi, '10.1590/0100-879X2024000100001');
+  assert.equal(scieloRecords[0].pdf_available, true);
+  assert.equal(scieloRecords[0].pdf_url, 'https://www.scielo.br/j/bjrm/a/scielo-alpha/?format=pdf');
 });
 
 test('Google Scholar extractor paginates until the configured per-source limit', async () => {
@@ -165,6 +178,7 @@ test('runSearchAndPersist supports browser live mode without API credentials', a
     ieee: 'ieee-search.html',
     acm: 'acm-search.html',
     google_scholar: 'scholar-search.html',
+    scielo: 'scielo-search.html',
   });
 
   const config = loadSourcesConfig({
@@ -177,6 +191,8 @@ test('runSearchAndPersist supports browser live mode without API credentials', a
       ieee: { enabled: true, mode: 'live', search_url: 'https://ieeexplore.ieee.org/search/searchresult.jsp' },
       acm: { enabled: true, mode: 'live', search_url: 'https://dl.acm.org/action/doSearch' },
       google_scholar: { enabled: true, experimental: true, mode: 'live', search_url: 'https://scholar.google.com/scholar' },
+      scielo: { enabled: true, mode: 'live', search_url: 'https://search.scielo.org/' },
+      web_of_science: { enabled: false, mode: 'api', api_url: 'https://api.clarivate.com/apis/wos-starter/v1/documents' },
     },
   });
 
@@ -193,8 +209,9 @@ test('runSearchAndPersist supports browser live mode without API credentials', a
   assert.equal(result.summary.sourceCoverage.ieee.status, 'completed');
   assert.equal(result.summary.sourceCoverage.acm.status, 'completed');
   assert.equal(result.summary.sourceCoverage.google_scholar.status, 'completed');
-  assert.equal(result.summary.totalRawRecords, 7);
-  assert.equal(result.summary.uniqueRecords, 5);
+  assert.equal(result.summary.sourceCoverage.scielo.status, 'completed');
+  assert.equal(result.summary.totalRawRecords, 9);
+  assert.equal(result.summary.uniqueRecords, 7);
   assert.equal(result.records[0].pdf_available, true);
   assert.equal(result.records[0].pdf_url, 'https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=IEEE-ALPHA');
   assert.equal(result.records[1].pdf_available, true);
@@ -246,6 +263,8 @@ test('runSearchAndPersist honors a source-specific Google Scholar limit above th
       scopus: { enabled: false, mode: 'live', search_url: 'https://www.scopus.com/results/results.uri' },
       ieee: { enabled: false, mode: 'live', search_url: 'https://ieeexplore.ieee.org/search/searchresult.jsp' },
       acm: { enabled: false, mode: 'live', search_url: 'https://dl.acm.org/action/doSearch' },
+      scielo: { enabled: false, mode: 'live', search_url: 'https://search.scielo.org/' },
+      web_of_science: { enabled: false, mode: 'api', api_url: 'https://api.clarivate.com/apis/wos-starter/v1/documents' },
       google_scholar: {
         enabled: true,
         experimental: true,
