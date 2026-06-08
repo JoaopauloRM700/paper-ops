@@ -3,16 +3,18 @@ import { join } from 'node:path';
 
 import { readProjectEnv } from './env.mjs';
 
-const DEFAULT_SOURCES = ['scopus', 'ieee', 'acm', 'google_scholar'];
+const DEFAULT_SOURCES = ['scopus', 'ieee', 'acm', 'google_scholar', 'scielo', 'web_of_science'];
 const API_KEY_ENV = {
   scopus: 'SCOPUS_API_KEY',
   ieee: 'IEEE_API_KEY',
+  web_of_science: 'WEB_OF_SCIENCE_API_KEY',
 };
 
 function parseApiKeysText(rawText) {
   return {
     scopus: rawText.match(/Scopus(?:-API-Key|_API_KEY| API Key)\s*:\s*([A-Za-z0-9-]+)/i)?.[1] ?? '',
     ieee: rawText.match(/IEEE(?:\s+Xplore)?[\s\S]*?Key\s*:\s*([A-Za-z0-9-]+)/i)?.[1] ?? '',
+    web_of_science: rawText.match(/(?:Web\s+of\s+Science|WOS)(?:-API-Key|_API_KEY| API Key)?\s*:\s*([A-Za-z0-9-]+)/i)?.[1] ?? '',
   };
 }
 
@@ -23,7 +25,7 @@ export function readLocalApiKeys(projectRoot, env = process.env) {
 
   for (const sourceName of Object.keys(API_KEY_ENV)) {
     const envName = API_KEY_ENV[sourceName];
-    resolved[sourceName] = env?.[envName] || fileKeys[sourceName] || '';
+    resolved[sourceName] = env?.[envName] || (sourceName === 'web_of_science' ? env?.WOS_API_KEY : '') || fileKeys[sourceName] || '';
   }
 
   return resolved;

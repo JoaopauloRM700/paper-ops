@@ -35,6 +35,20 @@
       "search_url": "https://scholar.google.com/scholar",
       "settle_time_ms": 2000,
       "fixture": "scholar.json"
+    },
+    "scielo": {
+      "enabled": true,
+      "mode": "api",
+      "requires_api_key": false,
+      "api_url": "https://search.scielo.org/",
+      "search_url": "https://search.scielo.org/",
+      "fixture": "scielo.json"
+    },
+    "web_of_science": {
+      "enabled": true,
+      "mode": "api",
+      "api_url": "https://api.clarivate.com/apis/wos-starter/v1/documents",
+      "fixture": "web-of-science.json"
     }
   }
 }

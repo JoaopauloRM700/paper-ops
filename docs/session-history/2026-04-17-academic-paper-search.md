@@ -760,3 +760,20 @@ Focused tests cover:
 - parser cleanup with `destroy()`
 - `ask` CLI routing
 - answer artifact creation from extracted text
+
+## SciELO and Web of Science Integration
+
+The source catalog was expanded after the user requested explicit support for SciELO and Web of Science.
+
+### Adjustment made
+
+1. Added `scielo` as a free, no-auth API source using the SciELO Search JSON endpoint.
+2. Added `web_of_science` as an API-mode source using `WEB_OF_SCIENCE_API_KEY` or `WOS_API_KEY`.
+3. Updated `config/sources.yml` so both sources participate in normal `paper-ops search` runs.
+4. Added fixtures and tests for SciELO live extraction and Web of Science API normalization.
+5. Updated README, setup, architecture, doctor, and agent instructions to include the new source coverage.
+
+### Operational notes
+
+- SciELO uses `https://search.scielo.org/?format=json` by default and can still run in live browser mode if configured that way.
+- Web of Science depends on the user's Clarivate API subscription and may require tuning `sources.web_of_science.api_url` in `config/sources.yml` if the account uses a different endpoint.

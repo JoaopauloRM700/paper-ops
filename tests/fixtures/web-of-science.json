@@ -1,0 +1,64 @@
+{
+  "hits": [
+    {
+      "uid": "WOS:000000000000001",
+      "title": "Evidence Mapping with Research Agents",
+      "names": {
+        "authors": [
+          { "displayName": "Grace Hopper" },
+          { "displayName": "Katherine Johnson" }
+        ]
+      },
+      "source": {
+        "sourceTitle": "Journal of Research Automation",
+        "publishYear": 2024
+      },
+      "identifiers": {
+        "doi": "10.5555/wos-alpha"
+      },
+      "links": {
+        "record": "https://www.webofscience.com/wos/woscc/full-record/WOS:000000000000001"
+      },
+      "abstract": "This paper studies evidence mapping workflows that use research agents."
+    },
+    {
+      "UID": "WOS:000000000000002",
+      "static_data": {
+        "summary": {
+          "titles": {
+            "title": [
+              { "type": "source", "content": "Information Retrieval Review" },
+              { "type": "item", "content": "Hybrid Retrieval for Literature Screening" }
+            ]
+          },
+          "names": {
+            "name": [
+              { "role": "author", "display_name": "Ada Lovelace" }
+            ]
+          },
+          "pub_info": {
+            "pubyear": "2023"
+          }
+        },
+        "fullrecord_metadata": {
+          "abstracts": {
+            "abstract": {
+              "abstract_text": {
+                "p": ["A hybrid retrieval method is evaluated for literature screening."]
+              }
+            }
+          }
+        }
+      },
+      "dynamic_data": {
+        "cluster_related": {
+          "identifiers": {
+            "identifier": [
+              { "type": "doi", "value": "10.5555/wos-beta" }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

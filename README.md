@@ -1,20 +1,21 @@
 # paper-ops
 
-PaperOps is academic paper search tooling built for local, source-aware literature discovery. Run one search string across Scopus, IEEE, ACM, and Google Scholar, combine official API-backed retrieval with browser-driven extraction where needed, deduplicate the results, and save both a readable report and a machine-readable JSON export.
+PaperOps is academic paper search tooling built for local, source-aware literature discovery. Run one search string across Scopus, IEEE, ACM, Google Scholar, SciELO, and Web of Science, combine official API-backed retrieval with browser-driven extraction where needed, deduplicate the results, and save both a readable report and a machine-readable JSON export.
 
 This project was developed using [career-ops](https://github.com/santifer/career-ops) as its base. `paper-ops` reworks that operational foundation for academic paper discovery instead of job-search workflows.
 
 ## Credits
 
 - Base project and operational inspiration: [santifer/career-ops](https://github.com/santifer/career-ops)
-- `paper-ops` adapts that foundation to a literature-search workflow centered on Scopus, IEEE, ACM, and Google Scholar
+- `paper-ops` adapts that foundation to a literature-search workflow centered on Scopus, IEEE, ACM, Google Scholar, SciELO, and Web of Science
 
 ## What It Does
 
 - **Hybrid Input:** Accepts raw Boolean search strings or **Research Profile Markdown files**.
 - **Automated Query Generation:** Converts research profiles into robust Boolean search queries.
-- **Multi-Source Discovery:** Queries Scopus, IEEE, ACM, and Google Scholar through a shared adapter contract.
-- Uses official APIs for Scopus and IEEE when keys are configured
+- **Multi-Source Discovery:** Queries Scopus, IEEE, ACM, Google Scholar, SciELO, and Web of Science through a shared adapter contract.
+- Uses official APIs for Scopus, IEEE, and Web of Science when keys are configured
+- Uses the free SciELO JSON API without authentication
 - Uses browser-driven extraction for ACM and Google Scholar
 - Normalizes results into a common `PaperRecord` shape
 - Deduplicates by DOI, then source identity, then title plus year
@@ -62,7 +63,7 @@ Optional setup:
 ## Quick Start
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/JoaopauloRM700/paper-ops.git
 cd paper-ops
 
 # Install required dependencies
@@ -187,6 +188,8 @@ This limit is applied per source in each search run:
 - `ieee` returns up to that many records
 - `acm` returns up to that many records
 - `google_scholar` now paginates across Scholar result pages until it reaches that limit or runs out of results
+- `scielo` returns up to that many records from the SciELO JSON API
+- `web_of_science` returns up to that many records from the configured Web of Science API endpoint
 
 For Google Scholar, you can also tune pagination behavior with:
 
@@ -205,7 +208,7 @@ Each source supports:
 
 API keys are resolved in this order:
 
-1. process environment variables such as `SCOPUS_API_KEY` and `IEEE_API_KEY`
+1. process environment variables such as `SCOPUS_API_KEY`, `IEEE_API_KEY`, and `WEB_OF_SCIENCE_API_KEY`
 2. local `.env`
 3. local `config/keys.txt` fallback
 
@@ -321,10 +324,13 @@ npm run search:smoke
 ## Notes
 
 - The dependency installation step is mandatory. Without `npm install`, the repo has no `playwright` package; without `npx playwright install chromium`, browser-driven sources will fail.
-- Scopus and IEEE now default to official API-backed retrieval when local keys are available.
+- Scopus, IEEE, and Web of Science now default to official API-backed retrieval when local keys are available.
    IEEE Xplore API: https://developer.ieee.org/docs
    Elsevier Research Products APIs : https://dev.elsevier.com/
+- Web of Science uses `WEB_OF_SCIENCE_API_KEY` or `WOS_API_KEY`; the API URL can be tuned in `config/sources.yml` if your Clarivate subscription exposes a different endpoint.
+- Web of Science raw search strings are sent as topic searches, `TS=(...)`; set `sources.web_of_science.raw_query` to `true` if you want to pass an advanced Web of Science query unchanged.
 - `.env.example` is the tracked template. `.env` is local-only and ignored by git.
+- SciELO uses the free `search.scielo.org` JSON API and does not require authentication.
 - ACM and Google Scholar remain browser-driven.
 - Google Scholar is still experimental and best-effort, but it now paginates through Scholar result pages to honor `per_source_limit` more accurately.
 - Pipeline and batch runs now avoid artifact-name collisions when the same query appears more than once in the same execution.

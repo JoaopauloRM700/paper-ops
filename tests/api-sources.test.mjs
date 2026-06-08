@@ -41,10 +41,11 @@ function jsonResponse(payload) {
 
 test('parseDotEnv reads simple KEY=value entries', () => {
   assert.deepEqual(
-    parseDotEnv('# comment\nSCOPUS_API_KEY=scopus-key\nIEEE_API_KEY="ieee-key"\n'),
+    parseDotEnv('# comment\nSCOPUS_API_KEY=scopus-key\nIEEE_API_KEY="ieee-key"\nWEB_OF_SCIENCE_API_KEY=wos-key\n'),
     {
       SCOPUS_API_KEY: 'scopus-key',
       IEEE_API_KEY: 'ieee-key',
+      WEB_OF_SCIENCE_API_KEY: 'wos-key',
     },
   );
 });
@@ -58,11 +59,13 @@ test('readSourcesConfig loads API keys from .env, lets env override them, and ke
         ieee: { enabled: true, mode: 'api', api_url: 'https://ieeexploreapi.ieee.org/api/v1/search/articles' },
         acm: { enabled: false, mode: 'live', search_url: 'https://dl.acm.org/action/doSearch' },
         google_scholar: { enabled: false, mode: 'live', search_url: 'https://scholar.google.com/scholar' },
+        scielo: { enabled: false, mode: 'live', search_url: 'https://search.scielo.org/' },
+        web_of_science: { enabled: true, mode: 'api', api_url: 'https://api.clarivate.com/apis/wos-starter/v1/documents' },
       },
     },
     {
-      envText: 'SCOPUS_API_KEY=dotenv-scopus-key\nIEEE_API_KEY=dotenv-ieee-key\n',
-      keysText: 'Scopus-API-Key: fallback-scopus-key;\nIEEE Xplore : Metadata Search\nKey: fallback-ieee-key\n',
+      envText: 'SCOPUS_API_KEY=dotenv-scopus-key\nIEEE_API_KEY=dotenv-ieee-key\nWEB_OF_SCIENCE_API_KEY=dotenv-wos-key\n',
+      keysText: 'Scopus-API-Key: fallback-scopus-key;\nIEEE Xplore : Metadata Search\nKey: fallback-ieee-key\nWeb of Science API Key: fallback-wos-key\n',
     },
   );
 
@@ -72,6 +75,7 @@ test('readSourcesConfig loads API keys from .env, lets env override them, and ke
 
   assert.equal(config.sources.scopus.api_key, 'dotenv-scopus-key');
   assert.equal(config.sources.ieee.api_key, 'env-ieee-key');
+  assert.equal(config.sources.web_of_science.api_key, 'dotenv-wos-key');
 });
 
 test('runSearchAndPersist supports IEEE and Scopus official API mode without browser automation', async () => {
@@ -99,6 +103,8 @@ test('runSearchAndPersist supports IEEE and Scopus official API mode without bro
       },
       acm: { enabled: false, mode: 'live', search_url: 'https://dl.acm.org/action/doSearch' },
       google_scholar: { enabled: false, experimental: true, mode: 'live', search_url: 'https://scholar.google.com/scholar' },
+      scielo: { enabled: false, mode: 'live', search_url: 'https://search.scielo.org/' },
+      web_of_science: { enabled: false, mode: 'api', api_url: 'https://api.clarivate.com/apis/wos-starter/v1/documents' },
     },
   });
 
@@ -154,6 +160,12 @@ test('runSearchAndPersist skips API sources without keys and still processes rem
       },
       acm: { enabled: true, mode: 'fixture', fixture: 'acm.json' },
       google_scholar: { enabled: false, experimental: true, mode: 'live', search_url: 'https://scholar.google.com/scholar' },
+      scielo: { enabled: false, mode: 'live', search_url: 'https://search.scielo.org/' },
+      web_of_science: {
+        enabled: true,
+        mode: 'api',
+        api_url: 'https://api.clarivate.com/apis/wos-starter/v1/documents',
+      },
     },
   });
 
@@ -173,6 +185,115 @@ test('runSearchAndPersist skips API sources without keys and still processes rem
   assert.match(result.summary.sourceCoverage.scopus.reason, /API key not configured/i);
   assert.equal(result.summary.sourceCoverage.ieee.status, 'skipped');
   assert.match(result.summary.sourceCoverage.ieee.reason, /API key not configured/i);
+  assert.equal(result.summary.sourceCoverage.web_of_science.status, 'skipped');
+  assert.match(result.summary.sourceCoverage.web_of_science.reason, /API key not configured/i);
   assert.equal(result.summary.sourceCoverage.acm.status, 'completed');
   assert.equal(fetchCallCount, 0);
+});
+
+test('runSearchAndPersist supports Web of Science API mode', async () => {
+  const wosPayload = JSON.parse(readFileSync(new URL('./fixtures/web-of-science.json', import.meta.url), 'utf8'));
+  const fetchCalls = [];
+
+  const config = loadSourcesConfig({
+    defaults: {
+      per_source_limit: 5,
+      fixture_mode: false,
+    },
+    sources: {
+      scopus: { enabled: false, mode: 'api', api_url: 'https://api.elsevier.com/content/search/scopus' },
+      ieee: { enabled: false, mode: 'api', api_url: 'https://ieeexploreapi.ieee.org/api/v1/search/articles' },
+      acm: { enabled: false, mode: 'live', search_url: 'https://dl.acm.org/action/doSearch' },
+      google_scholar: { enabled: false, experimental: true, mode: 'live', search_url: 'https://scholar.google.com/scholar' },
+      scielo: { enabled: false, mode: 'live', search_url: 'https://search.scielo.org/' },
+      web_of_science: {
+        enabled: true,
+        mode: 'api',
+        api_url: 'https://api.clarivate.com/apis/wos-starter/v1/documents',
+        api_key: 'wos-test-key',
+      },
+    },
+  });
+
+  const result = await runSearchAndPersist({
+    query: '"research agents"',
+    config,
+    projectRoot: mkdtempSync(join(tmpdir(), 'paper-ops-wos-api-')),
+    fixtureDir: FIXTURE_DIR,
+    fetchImpl: async (url, options = {}) => {
+      fetchCalls.push({ url, options });
+      return jsonResponse(wosPayload);
+    },
+  });
+
+  assert.equal(result.summary.sourceCoverage.web_of_science.status, 'completed');
+  assert.equal(result.summary.totalRawRecords, 2);
+  assert.equal(result.summary.uniqueRecords, 2);
+  assert.equal(result.records[0].source, 'web_of_science');
+  assert.equal(result.records[0].doi, '10.5555/wos-alpha');
+  assert.equal(result.records[1].title, 'Hybrid Retrieval for Literature Screening');
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(new URL(fetchCalls[0].url).searchParams.get('q'), 'TS=("research agents")');
+  assert.match(fetchCalls[0].url, /[?&]limit=5\b/);
+  assert.equal(fetchCalls[0].options.headers['X-ApiKey'], 'wos-test-key');
+});
+
+test('runSearchAndPersist supports SciELO API mode without credentials', async () => {
+  const scieloPayload = {
+    docs: [
+      {
+        pid: 'S0100-879X2024000100001',
+        title: { en: 'Open Science Workflows for Evidence Synthesis' },
+        authors: ['Maria Silva', 'Joao Souza'],
+        journal_title: 'Brazilian Journal of Research Methods',
+        publication_year: '2024',
+        doi: '10.1590/0100-879X2024000100001',
+        url: 'https://www.scielo.br/j/bjrm/a/scielo-alpha/',
+        abstract: { en: 'This article evaluates open science workflows for reproducible evidence synthesis.' },
+        pdf_url: 'https://www.scielo.br/j/bjrm/a/scielo-alpha/?format=pdf',
+      },
+    ],
+  };
+  const fetchCalls = [];
+
+  const config = loadSourcesConfig({
+    defaults: {
+      per_source_limit: 5,
+      fixture_mode: false,
+    },
+    sources: {
+      scopus: { enabled: false, mode: 'api', api_url: 'https://api.elsevier.com/content/search/scopus' },
+      ieee: { enabled: false, mode: 'api', api_url: 'https://ieeexploreapi.ieee.org/api/v1/search/articles' },
+      acm: { enabled: false, mode: 'live', search_url: 'https://dl.acm.org/action/doSearch' },
+      google_scholar: { enabled: false, experimental: true, mode: 'live', search_url: 'https://scholar.google.com/scholar' },
+      scielo: {
+        enabled: true,
+        mode: 'api',
+        requires_api_key: false,
+        api_url: 'https://search.scielo.org/',
+      },
+      web_of_science: { enabled: false, mode: 'api', api_url: 'https://api.clarivate.com/apis/wos-starter/v1/documents' },
+    },
+  });
+
+  const result = await runSearchAndPersist({
+    query: 'machine learning',
+    config,
+    projectRoot: mkdtempSync(join(tmpdir(), 'paper-ops-scielo-api-')),
+    fixtureDir: FIXTURE_DIR,
+    fetchImpl: async (url, options = {}) => {
+      fetchCalls.push({ url, options });
+      return jsonResponse(scieloPayload);
+    },
+  });
+
+  assert.equal(result.summary.sourceCoverage.scielo.status, 'completed');
+  assert.equal(result.summary.totalRawRecords, 1);
+  assert.equal(result.records[0].source, 'scielo');
+  assert.equal(result.records[0].doi, '10.1590/0100-879x2024000100001');
+  assert.equal(result.records[0].pdf_available, true);
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(new URL(fetchCalls[0].url).searchParams.get('format'), 'json');
+  assert.equal(new URL(fetchCalls[0].url).searchParams.get('count'), '5');
+  assert.deepEqual(fetchCalls[0].options.headers, {});
 });

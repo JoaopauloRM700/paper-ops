@@ -11,6 +11,7 @@ Use this repo as a local academic paper discovery workspace.
 
 ## Public Surface
 
+- Default sources: Scopus, IEEE, ACM, Google Scholar, SciELO, and Web of Science
 - `paper-ops` -> show the command menu
 - `paper-ops search <query>` -> run a saved search
 - `paper-ops fetch-pdfs <query>` -> download PDFs from saved results for one query
