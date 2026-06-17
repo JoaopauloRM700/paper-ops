@@ -218,7 +218,7 @@ export async function runWebOfScienceSearch({ query, sourceConfig, fixtureDir, r
     const payload = await fetchJson(
       fetchImpl,
       buildSearchUrl(sourceConfig.api_url ?? DEFAULT_WEB_OF_SCIENCE_API_URL, sourceConfig.query_param ?? 'q', formatWebOfScienceQuery(query, sourceConfig), {
-        [sourceConfig.limit_param ?? 'limit']: limit,
+        [sourceConfig.limit_param ?? 'limit']: Math.min(limit, 50),
       }),
       {
         headers: {

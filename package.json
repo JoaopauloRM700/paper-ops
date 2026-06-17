@@ -26,6 +26,7 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "@opendataloader/pdf": "^2.4.7",
     "pdf-parse": "^2.4.5",
     "playwright": "^1.59.1"
   }

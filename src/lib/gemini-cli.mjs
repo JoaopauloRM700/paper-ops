@@ -8,15 +8,22 @@ export function buildGeminiPrompt(argv = []) {
   const fixturesFlag = routed.flags.fixtures ? ' --fixtures' : '';
   const questionFlag = routed.flags.question ? ` --question ${JSON.stringify(routed.flags.question)}` : '';
   const refreshTextFlag = routed.flags.refreshText ? ' --refresh-text' : '';
+  const refreshCorpusFlag = routed.flags.refreshCorpus ? ' --refresh-corpus' : '';
 
   if (routed.mode === 'help') {
     return 'paper-ops';
   }
 
-  if (['search', 'csv', 'fetch-pdfs', 'summarize', 'digest', 'ask'].includes(routed.mode)) {
+  if (['search', 'csv', 'fetch-pdfs', 'summarize', 'digest', 'ask', 'ingest'].includes(routed.mode)) {
     return routed.query
-      ? `paper-ops ${routed.mode} ${JSON.stringify(routed.query)}${questionFlag}${refreshTextFlag}${fixturesFlag}`
-      : `paper-ops${questionFlag}${refreshTextFlag}${fixturesFlag}`;
+      ? `paper-ops ${routed.mode} ${JSON.stringify(routed.query)}${questionFlag}${refreshTextFlag}${refreshCorpusFlag}${fixturesFlag}`
+      : `paper-ops${questionFlag}${refreshTextFlag}${refreshCorpusFlag}${fixturesFlag}`;
+  }
+
+  if (routed.mode === 'workspace-init') {
+    return routed.query
+      ? `paper-ops workspace init ${JSON.stringify(routed.query)}`
+      : 'paper-ops';
   }
 
   return `paper-ops ${routed.mode}${fixturesFlag}`;

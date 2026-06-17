@@ -1,12 +1,15 @@
 import {
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 import {
+  answerQuestionFromEvidenceChunks,
   answerQuestionFromArticleTexts,
   summarizeArticleText,
   summarizeSearchDigest,
@@ -16,6 +19,7 @@ import { readSourcesConfig } from './config.mjs';
 import { readSavedSearchExports } from './csv-export.mjs';
 import { deduplicatePaperRecords } from './papers.mjs';
 import { extractTextFromPdfFile } from './pdf-extractor.mjs';
+import { ensureWorkspaceArtifactDirs, resolveWorkspacePaths } from './workspace.mjs';
 
 function normalizeQuery(query) {
   return String(query ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -44,6 +48,14 @@ function slugify(input, maxLength = 64) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
+    .slice(0, maxLength);
+}
+
+function sanitizeFilename(input, maxLength = 120) {
+  return String(input ?? '')
+    .replace(/[<>:"/\\|?*]/g, '') // Remove invalid Windows filename characters
+    .replace(/\s+/g, ' ')
+    .trim()
     .slice(0, maxLength);
 }
 
@@ -78,22 +90,7 @@ function buildRunId(query, now, suffix) {
 }
 
 function ensureArtifactDirs(projectRoot) {
-  const directories = {
-    pdfDir: join(projectRoot, 'output', 'pdfs'),
-    textDir: join(projectRoot, 'output', 'pdf-text'),
-    summaryJsonDir: join(projectRoot, 'output', 'article-summaries'),
-    digestJsonDir: join(projectRoot, 'output', 'digests'),
-    answerJsonDir: join(projectRoot, 'output', 'answers'),
-    summaryMarkdownDir: join(projectRoot, 'reports', 'article-summaries'),
-    digestMarkdownDir: join(projectRoot, 'reports', 'digests'),
-    answerMarkdownDir: join(projectRoot, 'reports', 'answers'),
-  };
-
-  for (const directory of Object.values(directories)) {
-    mkdirSync(directory, { recursive: true });
-  }
-
-  return directories;
+  return ensureWorkspaceArtifactDirs(projectRoot);
 }
 
 function resolveSavedQueryRecords(projectRoot, query) {
@@ -369,6 +366,273 @@ ${sources}
 `;
 }
 
+function escapeJsonl(value) {
+  return `${JSON.stringify(value)}\n`;
+}
+
+function normalizeMarkdownFromText(text) {
+  const normalized = String(text ?? '').replace(/\r\n/g, '\n').trim();
+  return normalized ? normalized : 'No text extracted.';
+}
+
+function buildStructuredFallbackFromText(text, textSource, record) {
+  return [
+    {
+      type: 'paragraph',
+      source: textSource,
+      'page number': textSource === 'pdf_parse' ? 1 : null,
+      'bounding box': null,
+      title: record.title || 'unknown',
+      content: normalizeMarkdownFromText(text),
+    },
+  ];
+}
+
+function extractPageNumber(value) {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function extractBoundingBox(value) {
+  return Array.isArray(value) && value.length === 4 ? value : null;
+}
+
+function buildHeadingAwareChunks(markdown, options = {}) {
+  const maxChars = options.maxChars ?? 2200;
+  const sections = [];
+  const lines = String(markdown ?? '').replace(/\r\n/g, '\n').split('\n');
+  let currentHeading = '';
+  let currentLines = [];
+
+  function flushCurrent() {
+    if (currentLines.length === 0) {
+      return;
+    }
+
+    sections.push({
+      heading: currentHeading || 'Document',
+      text: currentLines.join('\n').trim(),
+    });
+    currentLines = [];
+  }
+
+  for (const line of lines) {
+    if (/^#{1,6}\s+/.test(line.trim())) {
+      flushCurrent();
+      currentHeading = line.trim().replace(/^#{1,6}\s+/, '');
+      currentLines.push(line.trim());
+      continue;
+    }
+
+    currentLines.push(line);
+  }
+
+  flushCurrent();
+
+  const chunks = [];
+  for (const section of sections) {
+    const sectionText = section.text.trim();
+    if (!sectionText) {
+      continue;
+    }
+
+    if (sectionText.length <= maxChars) {
+      chunks.push({ heading: section.heading, text: sectionText });
+      continue;
+    }
+
+    let cursor = 0;
+    while (cursor < sectionText.length) {
+      const slice = sectionText.slice(cursor, cursor + maxChars).trim();
+      if (slice) {
+        chunks.push({ heading: section.heading, text: slice });
+      }
+      cursor += maxChars;
+    }
+  }
+
+  return chunks;
+}
+
+function inferPageAndBoundingBox(structuredData, chunkText) {
+  const normalizedChunk = normalizeText(chunkText).toLowerCase();
+  const entries = Array.isArray(structuredData) ? structuredData : [];
+
+  for (const entry of entries) {
+    const content = normalizeText(entry?.content ?? entry?.text ?? '').toLowerCase();
+    if (!content) {
+      continue;
+    }
+
+    if (normalizedChunk.includes(content) || content.includes(normalizedChunk.slice(0, Math.min(normalizedChunk.length, 120)))) {
+      return {
+        page: extractPageNumber(entry['page number'] ?? entry.pageNumber ?? entry.page),
+        boundingBox: extractBoundingBox(entry['bounding box'] ?? entry.boundingBox ?? entry.bounding_box),
+      };
+    }
+  }
+
+  return {
+    page: extractPageNumber(entries[0]?.['page number'] ?? entries[0]?.pageNumber ?? entries[0]?.page),
+    boundingBox: extractBoundingBox(entries[0]?.['bounding box'] ?? entries[0]?.boundingBox ?? entries[0]?.bounding_box),
+  };
+}
+
+function resolveSavedWorkspaceRecords(projectRoot) {
+  const matchingExports = readSavedSearchExports(projectRoot)
+    .sort((left, right) => parseGeneratedAt(right.generatedAt) - parseGeneratedAt(left.generatedAt));
+
+  if (matchingExports.length === 0) {
+    throw new Error(`No saved search results found in workspace: ${projectRoot}`);
+  }
+
+  const rawRecords = matchingExports.flatMap((entry) => entry.records);
+  const deduped = deduplicatePaperRecords(rawRecords);
+  const profile = matchingExports.find((entry) => entry.profile)?.profile ?? null;
+
+  return {
+    query: matchingExports[0].query,
+    matchedFiles: matchingExports.map((entry) => entry.filePath),
+    profile,
+    rawRecords,
+    records: deduped.uniqueRecords,
+    duplicatesRemoved: deduped.stats.duplicatesRemoved,
+  };
+}
+
+function buildCorpusChunks({ workspaceId, articleId, record, markdown, structuredData, textSource }) {
+  return buildHeadingAwareChunks(markdown).map((chunk, index) => {
+    const location = inferPageAndBoundingBox(structuredData, chunk.text);
+    return {
+      workspace_id: workspaceId,
+      article_id: articleId,
+      title: record.title || 'unknown',
+      year: record.year ?? null,
+      source: record.source || 'unknown',
+      doi: record.doi || '',
+      page: location.page,
+      bounding_box: location.boundingBox,
+      heading: chunk.heading,
+      chunk_index: index + 1,
+      text: chunk.text,
+      text_source: textSource,
+      url: record.url || '',
+    };
+  });
+}
+
+function buildAbstractMarkdown(record, abstractText, sourceLabel) {
+  return `# ${record.title || 'Untitled Article'}
+
+## Metadata
+
+- Source: ${record.source || 'unknown'}
+- Year: ${record.year ?? 'unknown'}
+- Venue: ${record.venue || 'unknown'}
+- DOI: ${record.doi || 'unknown'}
+- URL: ${record.url || 'unknown'}
+- Text source: ${sourceLabel}
+
+## Abstract
+
+${normalizeText(abstractText)}
+`;
+}
+
+function readJsonFile(filePath) {
+  return JSON.parse(readFileSync(filePath, 'utf8'));
+}
+
+function findGeneratedArtifact(directory, extensions) {
+  const filenames = readdirSync(directory);
+  for (const extension of extensions) {
+    const match = filenames.find((filename) => filename.toLowerCase().endsWith(extension));
+    if (match) {
+      return join(directory, match);
+    }
+  }
+
+  return '';
+}
+
+async function loadOpenDataLoaderConvert() {
+  const module = await import('@opendataloader/pdf');
+  return module.convert ?? module.default?.convert ?? module.default;
+}
+
+function isJavaAvailable() {
+  const result = spawnSync('java', ['-version'], { stdio: 'ignore', shell: process.platform === 'win32' });
+  return result.status === 0;
+}
+
+function resolvePdfParserPreference(projectRoot) {
+  const config = resolveDigestConfig(projectRoot);
+  return config.defaults?.pdf_parser ?? 'auto';
+}
+
+async function convertPdfToCanonicalArtifacts({
+  article,
+  directories,
+  projectRoot,
+  extractTextImpl,
+  openDataLoaderConvertImpl,
+  pdfParserPreference = resolvePdfParserPreference(projectRoot),
+}) {
+  const markdownPath = join(directories.articleMarkdownDir, `${article.articleId}.md`);
+  const structuredPath = join(directories.articleStructuredDir, `${article.articleId}.json`);
+  const tempOutputDir = join(directories.articleStructuredDir, `.tmp-${article.articleId}`);
+  mkdirSync(tempOutputDir, { recursive: true });
+
+  const canUseOpenDataLoader = pdfParserPreference !== 'pdf-parse'
+    && isJavaAvailable()
+    && (typeof openDataLoaderConvertImpl === 'function' || await loadOpenDataLoaderConvert().catch(() => null));
+
+  if (canUseOpenDataLoader) {
+    const convertImpl = openDataLoaderConvertImpl ?? await loadOpenDataLoaderConvert();
+    await convertImpl([article.pdf.path], {
+      outputDir: tempOutputDir,
+      format: 'markdown,json',
+    });
+
+    const generatedMarkdownPath = findGeneratedArtifact(tempOutputDir, ['.md', '.markdown']);
+    const generatedJsonPath = findGeneratedArtifact(tempOutputDir, ['.json']);
+
+    if (generatedMarkdownPath && generatedJsonPath) {
+      const markdown = readFileSync(generatedMarkdownPath, 'utf8');
+      const structured = readJsonFile(generatedJsonPath);
+      writeFileSync(markdownPath, markdown, 'utf8');
+      writeFileSync(structuredPath, JSON.stringify(structured, null, 2), 'utf8');
+      return {
+        markdown,
+        structured,
+        markdownPath,
+        structuredPath,
+        parser: 'opendataloader',
+        textSource: 'pdf_markdown',
+      };
+    }
+  }
+
+  const extractedText = await extractTextImpl(article.pdf.path, {
+    record: article.record,
+    articleId: article.articleId,
+    query: article.record.matched_query,
+    projectRoot,
+  });
+  const markdown = normalizeMarkdownFromText(extractedText);
+  const structured = buildStructuredFallbackFromText(extractedText, 'pdf_parse', article.record);
+  writeFileSync(markdownPath, markdown, 'utf8');
+  writeFileSync(structuredPath, JSON.stringify(structured, null, 2), 'utf8');
+  return {
+    markdown,
+    structured,
+    markdownPath,
+    structuredPath,
+    parser: 'pdf-parse',
+    textSource: 'pdf_parse',
+  };
+}
+
 function buildFallbackTextFromAbstract(record, abstractText, sourceLabel) {
   return [
     `Title: ${record.title || 'unknown'}`,
@@ -594,17 +858,380 @@ async function ensureArticleText({
   throw new Error('No usable PDF text or abstract was available for this article.');
 }
 
-export async function fetchQueryPdfs({ projectRoot, query, fetchImpl = fetch } = {}) {
+function mergeAnswerCitations(answerPayload, evidenceChunks) {
+  const knownByTitleAndPage = new Map(
+    evidenceChunks.map((chunk) => [
+      `${normalizeText(chunk.title).toLowerCase()}::${normalizeText(chunk.page ?? '').toLowerCase()}`,
+      chunk,
+    ]),
+  );
+
+  const fromEvidence = (answerPayload.supporting_evidence ?? []).map((entry) => {
+    const key = `${normalizeText(entry.title).toLowerCase()}::${normalizeText(entry.page).toLowerCase()}`;
+    const match = knownByTitleAndPage.get(key);
+    return {
+      title: entry.title,
+      page: entry.page,
+      source: match?.source ?? 'unknown',
+      doi: match?.doi ?? '',
+      bounding_box: match?.bounding_box ?? null,
+    };
+  });
+
+  const explicit = Array.isArray(answerPayload.citations) ? answerPayload.citations : [];
+  const merged = [...explicit, ...fromEvidence];
+  const deduped = [];
+  const seen = new Set();
+
+  for (const citation of merged) {
+    const key = `${citation.title}::${citation.page}::${citation.source}::${citation.doi}`;
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    deduped.push(citation);
+  }
+
+  return deduped;
+}
+
+export async function ingestWorkspaceCorpus({
+  workspaceRoot,
+  query = '',
+  fetchImpl = fetch,
+  extractTextImpl = extractTextFromPdfFile,
+  openDataLoaderConvertImpl,
+  refreshCorpus = false,
+} = {}) {
+  const recordSet = resolveSavedWorkspaceRecords(workspaceRoot);
+  const effectiveQuery = query || recordSet.query;
+  const directories = ensureArtifactDirs(workspaceRoot);
+  const workspacePaths = resolveWorkspacePaths(workspaceRoot);
+  const fetchResult = await fetchQueryPdfs({
+    projectRoot: workspaceRoot,
+    query: effectiveQuery,
+    fetchImpl,
+  });
+  const articles = fetchResult.articles;
+  const manifestArticles = [];
+  const chunkRecords = [];
+  const parserCounts = {
+    opendataloader: 0,
+    pdfParse: 0,
+    abstract: 0,
+  };
+
+  for (const article of articles) {
+    const markdownPath = join(directories.articleMarkdownDir, `${article.articleId}.md`);
+    const structuredPath = join(directories.articleStructuredDir, `${article.articleId}.json`);
+
+    let markdown = '';
+    let structured = [];
+    let parser = 'abstract';
+    let textSource = '';
+
+    if (!refreshCorpus && existsSync(markdownPath) && existsSync(structuredPath)) {
+      markdown = readFileSync(markdownPath, 'utf8');
+      structured = readJsonFile(structuredPath);
+      textSource = structured[0]?.source ?? (article.record.pdf_url ? 'pdf_markdown' : 'record_abstract');
+      parser = textSource === 'pdf_parse' ? 'pdf-parse' : (textSource === 'pdf_markdown' ? 'opendataloader' : 'abstract');
+    } else if (article.pdf.path && ['downloaded', 'cached'].includes(article.pdf.status)) {
+      const converted = await convertPdfToCanonicalArtifacts({
+        article,
+        directories,
+        projectRoot: workspaceRoot,
+        extractTextImpl,
+        openDataLoaderConvertImpl,
+      });
+      markdown = converted.markdown;
+      structured = converted.structured;
+      parser = converted.parser;
+      textSource = converted.textSource;
+    } else if (looksUsefulAbstract(article.record.abstract, 15)) {
+      markdown = buildAbstractMarkdown(article.record, article.record.abstract, 'record_abstract');
+      structured = buildStructuredFallbackFromText(article.record.abstract, 'record_abstract', article.record);
+      writeFileSync(markdownPath, markdown, 'utf8');
+      writeFileSync(structuredPath, JSON.stringify(structured, null, 2), 'utf8');
+      textSource = 'record_abstract';
+      parser = 'abstract';
+    } else {
+      const fallbackText = await extractFallbackTextFromArticlePage(article.record, fetchImpl);
+      if (!looksUsefulAbstract(fallbackText, 40)) {
+        continue;
+      }
+
+      markdown = buildAbstractMarkdown(article.record, fallbackText, 'landing_page_abstract');
+      structured = buildStructuredFallbackFromText(fallbackText, 'landing_page_abstract', article.record);
+      writeFileSync(markdownPath, markdown, 'utf8');
+      writeFileSync(structuredPath, JSON.stringify(structured, null, 2), 'utf8');
+      textSource = 'landing_page_abstract';
+      parser = 'abstract';
+    }
+
+    if (parser === 'opendataloader') {
+      parserCounts.opendataloader += 1;
+    } else if (parser === 'pdf-parse') {
+      parserCounts.pdfParse += 1;
+    } else {
+      parserCounts.abstract += 1;
+    }
+
+    const articleChunks = buildCorpusChunks({
+      workspaceId: workspacePaths.workspaceId,
+      articleId: article.articleId,
+      record: article.record,
+      markdown,
+      structuredData: structured,
+      textSource,
+    });
+
+    manifestArticles.push({
+      articleId: article.articleId,
+      title: article.record.title,
+      year: article.record.year ?? null,
+      source: article.record.source,
+      doi: article.record.doi || '',
+      pdfPath: article.pdf.path || '',
+      markdownPath,
+      structuredPath,
+      parser,
+      textSource,
+      chunkCount: articleChunks.length,
+    });
+    chunkRecords.push(...articleChunks);
+  }
+
+  writeFileSync(
+    workspacePaths.corpusManifestPath,
+    JSON.stringify(
+      {
+        generatedAt: new Date().toISOString(),
+        workspace: {
+          id: workspacePaths.workspaceId,
+          root: workspaceRoot,
+          briefPath: workspacePaths.briefPath,
+          query: effectiveQuery,
+          profile: recordSet.profile,
+        },
+        articles: manifestArticles,
+      },
+      null,
+      2,
+    ),
+    'utf8',
+  );
+  writeFileSync(workspacePaths.chunksPath, chunkRecords.map((chunk) => escapeJsonl(chunk)).join(''), 'utf8');
+
+  return {
+    workspace: {
+      id: workspacePaths.workspaceId,
+      root: workspaceRoot,
+      briefPath: workspacePaths.briefPath,
+    },
+    query: effectiveQuery,
+    articles: manifestArticles,
+    summary: {
+      totalArticles: articles.length,
+      ingestedArticles: manifestArticles.length,
+      chunkCount: chunkRecords.length,
+      parsers: parserCounts,
+    },
+    artifacts: {
+      manifest: workspacePaths.corpusManifestPath,
+      chunks: workspacePaths.chunksPath,
+      articleMarkdownDirectory: directories.articleMarkdownDir,
+      articleStructuredDirectory: directories.articleStructuredDir,
+    },
+  };
+}
+
+function scoreCorpusChunk(questionTokens, chunk) {
+  const tokens = new Set(
+    normalizeText(chunk.text)
+      .toLowerCase()
+      .split(/[^a-z0-9_]+/i)
+      .filter((token) => token.length >= 3),
+  );
+
+  let score = 0;
+  for (const token of questionTokens) {
+    if (tokens.has(token)) {
+      score += 1;
+    }
+  }
+
+  return score;
+}
+
+function selectWorkspaceEvidenceChunks(question, chunks, maxChunks = 12) {
+  const questionTokens = new Set(
+    normalizeText(question)
+      .toLowerCase()
+      .split(/[^a-z0-9_]+/i)
+      .filter((token) => token.length >= 3),
+  );
+
+  const scored = chunks
+    .map((chunk) => ({
+      ...chunk,
+      relevanceScore: scoreCorpusChunk(questionTokens, chunk),
+    }))
+    .sort((left, right) => right.relevanceScore - left.relevanceScore);
+
+  const selected = [];
+  const seenArticleIds = new Set();
+
+  for (const chunk of scored) {
+    if (selected.length >= maxChunks) {
+      break;
+    }
+
+    if (chunk.relevanceScore <= 0 && selected.length > 0) {
+      continue;
+    }
+
+    if (seenArticleIds.has(chunk.article_id) && selected.filter((entry) => entry.article_id === chunk.article_id).length >= 2) {
+      continue;
+    }
+
+    selected.push({
+      title: chunk.title,
+      source: chunk.source,
+      doi: chunk.doi,
+      page: chunk.page ?? 'unknown',
+      bounding_box: chunk.bounding_box ?? null,
+      textSource: chunk.text_source,
+      text: chunk.text,
+      article_id: chunk.article_id,
+    });
+    seenArticleIds.add(chunk.article_id);
+  }
+
+  return selected;
+}
+
+export async function answerWorkspaceQuestion({
+  workspaceRoot,
+  query = '',
+  question,
+  now = new Date(),
+  fetchImpl = fetch,
+  extractTextImpl = extractTextFromPdfFile,
+  openDataLoaderConvertImpl,
+  questionAnswerer = answerQuestionFromEvidenceChunks,
+  refreshCorpus = false,
+} = {}) {
+  const workspacePaths = resolveWorkspacePaths(workspaceRoot);
+
+  if (refreshCorpus || !existsSync(workspacePaths.chunksPath) || !existsSync(workspacePaths.corpusManifestPath)) {
+    await ingestWorkspaceCorpus({
+      workspaceRoot,
+      query,
+      fetchImpl,
+      extractTextImpl,
+      openDataLoaderConvertImpl,
+      refreshCorpus,
+    });
+  }
+
+  const manifest = readJsonFile(workspacePaths.corpusManifestPath);
+  const chunks = readFileSync(workspacePaths.chunksPath, 'utf8')
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+  const selectedEvidenceChunks = selectWorkspaceEvidenceChunks(question, chunks);
+
+  if (selectedEvidenceChunks.length === 0) {
+    throw new Error('No corpus chunks were available to answer the question.');
+  }
+
+  const answerPayload = await questionAnswerer({
+    question,
+    evidenceChunks: selectedEvidenceChunks,
+    profile: manifest.workspace?.profile ?? null,
+  });
+  answerPayload.citations = mergeAnswerCitations(answerPayload, selectedEvidenceChunks);
+
+  const directories = ensureArtifactDirs(workspaceRoot);
+  const effectiveQuery = query || manifest.workspace?.query || 'workspace';
+  const runId = buildRunId(effectiveQuery, now, 'answer');
+  const answerJsonPath = join(directories.answerJsonDir, `${runId}.json`);
+  const answerMarkdownPath = join(directories.answerMarkdownDir, `${runId}.md`);
+  const articleTexts = manifest.articles.map((article) => ({
+    record: {
+      title: article.title,
+      year: article.year,
+    },
+    textSource: article.textSource,
+  }));
+
+  const payload = {
+    query: effectiveQuery,
+    question,
+    generatedAt: now.toISOString(),
+    answer: answerPayload,
+    citations: answerPayload.citations,
+    workspace: manifest.workspace,
+  };
+
+  writeFileSync(answerJsonPath, JSON.stringify(payload, null, 2), 'utf8');
+  writeFileSync(
+    answerMarkdownPath,
+    buildQuestionAnswerMarkdown({
+      query: effectiveQuery,
+      question,
+      generatedAt: now.toISOString(),
+      answerPayload,
+      articleTexts,
+    }),
+    'utf8',
+  );
+
+  return {
+    query: effectiveQuery,
+    question,
+    workspace: manifest.workspace,
+    answer: answerPayload,
+    articleTexts,
+    artifacts: {
+      answerJson: answerJsonPath,
+      answerMarkdown: answerMarkdownPath,
+      chunks: workspacePaths.chunksPath,
+      manifest: workspacePaths.corpusManifestPath,
+    },
+  };
+}
+
+export async function fetchQueryPdfs({ projectRoot, query, fetchImpl = fetch, targetDir = null, useTitleAsFilename = false } = {}) {
   const recordSet = resolveSavedQueryRecords(projectRoot, query);
   const directories = ensureArtifactDirs(projectRoot);
   const articles = recordSet.records.map(createArticleState);
+  const pdfOutputBase = targetDir ? join(projectRoot, targetDir) : directories.pdfDir;
+
+  if (targetDir) {
+    mkdirSync(pdfOutputBase, { recursive: true });
+  }
 
   for (const article of articles) {
     if (!article.pdf.url) {
       continue;
     }
 
-    article.pdf.path = join(directories.pdfDir, `${article.articleId}.pdf`);
+    let filename;
+    if (useTitleAsFilename) {
+      const year = article.record.year ? `[${article.record.year}] ` : '';
+      const safeTitle = sanitizeFilename(article.record.title, 100);
+      const suffix = article.articleId ? ` - ${article.articleId}` : '';
+      filename = safeTitle
+        ? `${year}${safeTitle}${suffix}.pdf`
+        : `${article.articleId}.pdf`;
+      console.log(`[DEBUG] Filename for "${article.record.title}": ${filename}`);
+    } else {
+      filename = `${article.articleId}.pdf`;
+    }
+
+    article.pdf.path = join(pdfOutputBase, filename);
 
     if (existsSync(article.pdf.path)) {
       article.pdf.status = 'cached';
@@ -639,7 +1266,7 @@ export async function fetchQueryPdfs({ projectRoot, query, fetchImpl = fetch } =
     articles,
     summary: buildFetchSummary(articles),
     artifacts: {
-      pdfDirectory: directories.pdfDir,
+      pdfDirectory: pdfOutputBase,
     },
   };
 }
