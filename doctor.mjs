@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { readSourcesConfig } from './src/lib/config.mjs';
+import { readProjectEnv } from './src/lib/env.mjs';
 
 const projectRoot = dirname(fileURLToPath(import.meta.url));
 const requiredSourceKeys = ['scopus', 'ieee', 'acm', 'google_scholar', 'scielo', 'web_of_science'];
@@ -192,6 +193,68 @@ async function checkOpenDataLoaderRuntime() {
   return createCheck(true, 'OpenDataLoader PDF runtime available');
 }
 
+async function checkSqliteRuntime() {
+  try {
+    const module = await import('better-sqlite3');
+    const Database = module.default ?? module;
+    const db = new Database(':memory:');
+    try {
+      db.exec('CREATE VIRTUAL TABLE paper_ops_fts_check USING fts5(content);');
+      return createCheck(true, 'SQLite runtime and FTS5 available');
+    } finally {
+      db.close();
+    }
+  } catch {
+    return createCheck(
+      false,
+      'SQLite runtime and FTS5 available',
+      'Run `npm install` in the repo root to install better-sqlite3 before using index/ask/evidence/references.',
+    );
+  }
+}
+
+function checkOcrRuntime() {
+  if (commandExists('ocrmypdf')) {
+    return { level: 'ok', label: 'OCRmyPDF available for OCR workflows', hint: '' };
+  }
+
+  return {
+    level: 'warn',
+    label: 'OCRmyPDF not found in PATH',
+    hint: 'Install OCRmyPDF/Tesseract before using `paper-ops ocr` or `paper-ops index --ocr`; non-OCR workflows still work.',
+  };
+}
+
+function checkEmbeddingProviderConfig() {
+  const env = readProjectEnv(projectRoot);
+  const provider = env.PAPER_OPS_EMBEDDING_PROVIDER;
+  if (provider === 'openai' && env.OPENAI_API_KEY) {
+    return { level: 'ok', label: 'OpenAI embedding provider configured', hint: '' };
+  }
+
+  if (provider === 'fixture') {
+    return {
+      level: 'warn',
+      label: 'Fixture embedding provider configured',
+      hint: 'Fixture embeddings are deterministic for tests; set PAPER_OPS_EMBEDDING_PROVIDER=openai and OPENAI_API_KEY for real semantic retrieval.',
+    };
+  }
+
+  if (env.OPENAI_API_KEY) {
+    return {
+      level: 'warn',
+      label: 'OPENAI_API_KEY found but embedding provider not selected',
+      hint: 'Set PAPER_OPS_EMBEDDING_PROVIDER=openai to use real semantic retrieval.',
+    };
+  }
+
+  return {
+    level: 'warn',
+    label: 'No real embedding provider configured',
+    hint: 'Semantic retrieval can run with fixture embeddings for tests; configure PAPER_OPS_EMBEDDING_PROVIDER=openai and OPENAI_API_KEY for real use.',
+  };
+}
+
 function checkBatchAssets() {
   const required = [
     join(projectRoot, 'batch', 'README.md'),
@@ -246,6 +309,9 @@ export async function getDoctorChecks() {
     await checkPdfParsingRuntime(),
     checkJavaRuntime(),
     await checkOpenDataLoaderRuntime(),
+    await checkSqliteRuntime(),
+    checkOcrRuntime(),
+    checkEmbeddingProviderConfig(),
     checkProjectDir('data'),
     checkProjectDir('reports'),
     checkProjectDir('output'),

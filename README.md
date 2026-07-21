@@ -22,9 +22,12 @@ This project was developed using [career-ops](https://github.com/santifer/career
 - Enriches each record with PDF availability plus a direct PDF URL when it can be detected
 - Downloads accessible PDFs from saved search results
 - Extracts text from downloaded PDFs when available
+- OCRs scanned PDFs into reusable text artifacts when OCRmyPDF is installed
 - Falls back to saved abstracts or landing-page abstracts when a PDF is not available
 - Uses a fast HTML fetch first and can fall back to Playwright on the article page for dynamic abstracts
-- Answers targeted questions using saved PDF text and abstract fallbacks
+- Builds a local SQLite RAG database from saved articles and extracted text
+- Answers targeted questions using indexed chunks, SQLite FTS/BM25 retrieval, optional semantic embeddings, hybrid retrieval, and verified supporting evidence
+- Exports evidence tables, ABNT/BibTeX/APA references, literature matrices, and sourced draft sections
 - Generates structured per-article summaries and cross-paper digests (incorporates research profile context)
 - Saves one markdown report and one JSON export per run
 - Maintains a lightweight search history index
@@ -36,6 +39,7 @@ This project was developed using [career-ops](https://github.com/santifer/career
 - Node.js 18+
 - `npm`
 - Chromium for Playwright-driven sources
+- Optional: OCRmyPDF/Tesseract for scanned PDF OCR
 - Optional: Gemini CLI for the interactive Gemini-first workflow
 
 ## Dependencies
@@ -51,7 +55,7 @@ npx playwright install chromium
 
 What each command does:
 
-- `npm install` installs the Node.js runtime dependency declared in [package.json](D:/workspace/paper-ops/package.json), currently `playwright`
+- `npm install` installs the Node.js runtime dependencies declared in [package.json](D:/workspace/paper-ops/package.json), including `playwright`, `pdf-parse`, and `better-sqlite3`
 - `npx playwright install chromium` installs the Chromium browser binary used by browser-driven sources such as ACM and Google Scholar
 
 Optional setup:
@@ -137,8 +141,17 @@ paper-ops search "<query>"   -> Run a multi-source search and save artifacts
 paper-ops fetch-pdfs "<query>" -> Download PDFs from saved results for one query
 paper-ops summarize "<query>" -> Use PDF text or abstract fallback to write structured article summaries
 paper-ops digest "<query>"   -> Generate a consolidated digest for one saved query
-paper-ops ask "<query>" --question "<question>" -> Answer from saved PDF/abstract text
-paper-ops ask "<query>" --question "<question>" --refresh-text -> Regenerate cached extracted text first
+paper-ops ocr "<query>"      -> OCR cached/downloadable PDFs for one saved query
+paper-ops db init            -> Initialize the local SQLite RAG database
+paper-ops index "<query>"    -> Build a local RAG index from saved PDFs/text/abstracts
+paper-ops embed "<query>"    -> Generate semantic embeddings for indexed chunks
+paper-ops ask "<query>" --question "<question>" -> Answer from the local RAG index with evidence
+paper-ops ask "<query>" --question "<question>" --retrieval hybrid --embed -> Answer with BM25 + semantic retrieval
+paper-ops ask "<query>" --question "<question>" --refresh-text --refresh-index -> Regenerate cached text/index first
+paper-ops evidence "<query>" --question "<question>" -> Export retrieved evidence chunks
+paper-ops references "<query>" --format all -> Export ABNT, BibTeX, and APA references
+paper-ops matrix "<query>"   -> Export a literature matrix for one saved query
+paper-ops draft "<query>" --section related-work --question "<focus>" -> Draft a sourced section
 paper-ops csv "<query>"      -> Export a deduplicated CSV from saved results for one search string
 paper-ops <query>            -> Treat raw query text as a search command
 paper-ops pipeline           -> Process queued searches from data/search-queue.md
@@ -216,6 +229,10 @@ Additional optional environment variables for summarization:
 
 - `PAPER_OPS_SUMMARY_CLI` to override the summarization command, default `gemini`
 - `PAPER_OPS_SUMMARY_TIMEOUT_MS` to change the summarization timeout
+- `PAPER_OPS_OCR_LANG` to set the default OCR language, for example `por+eng`
+- `PAPER_OPS_EMBEDDING_PROVIDER` to select `openai` or `fixture`
+- `PAPER_OPS_EMBEDDING_MODEL` to select an embedding model, for example `text-embedding-3-small`
+- `OPENAI_API_KEY` when using the `openai` embedding provider
 
 ## CSV Export
 
@@ -270,11 +287,14 @@ Saved artifacts:
 - `reports/<run-id>.md`
 - `output/<run-id>.json`
 - `data/search-history.md`
+- `data/paper-ops.sqlite`
 
 Derived PDF and summary artifacts:
 
 - `output/pdfs/<article-id>.pdf`
 - `output/pdf-text/<article-id>.txt`
+- `output/ocr-pdfs/<article-id>.pdf`
+- `output/ocr-text/<article-id>.txt`
 - `output/article-summaries/<article-id>.json`
 - `output/article-summaries/<article-id>.txt`
 - `reports/article-summaries/<article-id>.md`
@@ -282,6 +302,13 @@ Derived PDF and summary artifacts:
 - `reports/digests/<run-id>.md`
 - `output/answers/<run-id>.json`
 - `reports/answers/<run-id>.md`
+- `output/rag/<query-id>/answers/*.json`
+- `output/rag/<query-id>/evidence/*.json`
+- `reports/rag/<query-id>/answers/*.md`
+- `reports/rag/<query-id>/evidence/*.md`
+- `reports/rag/<query-id>/references/*`
+- `reports/rag/<query-id>/matrix.*`
+- `reports/rag/<query-id>/drafts/*.md`
 
 ## PDF Reading and Summaries
 
@@ -291,8 +318,17 @@ The search runtime saves metadata first. PDF reading and summarization run as fo
 paper-ops fetch-pdfs "\"software testing\" AND ai"
 paper-ops summarize "\"software testing\" AND ai"
 paper-ops digest "\"software testing\" AND ai"
+paper-ops ocr "\"software testing\" AND ai" --ocr-lang por+eng
+paper-ops index "\"software testing\" AND ai"
+paper-ops embed "\"software testing\" AND ai" --embedding-provider openai --embedding-model text-embedding-3-small
 paper-ops ask "\"software testing\" AND ai" --question "What methods are used?"
-paper-ops ask "\"software testing\" AND ai" --question "What methods are used?" --refresh-text
+paper-ops ask "\"software testing\" AND ai" --question "What methods are used?" --retrieval hybrid --embed
+paper-ops evidence "\"software testing\" AND ai" --question "What methods are used?"
+paper-ops evidence "\"software testing\" AND ai" --question "What methods are used?" --retrieval semantic --embed
+paper-ops references "\"software testing\" AND ai" --format all
+paper-ops matrix "\"software testing\" AND ai"
+paper-ops draft "\"software testing\" AND ai" --section related-work --question "What methods are used?"
+paper-ops ask "\"software testing\" AND ai" --question "What methods are used?" --refresh-text --refresh-index
 ```
 
 Workflow:
@@ -300,15 +336,22 @@ Workflow:
 - `fetch-pdfs` downloads direct PDF links already discovered in saved search results
 - `summarize` reuses cached PDFs when present, otherwise falls back to a saved abstract or an abstract enriched from the article landing page
 - `digest` reuses those article summaries and generates a cross-paper digest for the whole search string
-- `ask` reuses or creates extracted text and answers one question from the available PDF/abstract evidence
+- `ocr` creates OCR PDF/text artifacts for scanned or image-heavy PDFs without overwriting the originals
+- `index` reuses or creates extracted text, prefers OCR text when `--ocr` is enabled, chunks it by page, and stores articles/chunks/references in `data/paper-ops.sqlite`
+- `embed` stores semantic vectors for indexed chunks
+- `ask` retrieves top chunks from SQLite FTS/BM25, semantic embeddings, or hybrid retrieval and answers only from that indexed evidence
+- `evidence`, `references`, `matrix`, and `draft` reuse the local RAG database for writing support
 - add `--refresh-text` to regenerate cached `output/pdf-text/*.txt` files with the current extractor
+- add `--refresh-index` to rebuild indexed chunks for a saved query
+- add `--refresh-embeddings` to rebuild semantic vectors for indexed chunks
 
 Current scope:
 
 - PDFs should be directly accessible and text-based when available
 - when no PDF is available, `summarize` and `ask` fall back to the saved `abstract` field or a landing-page abstract
 - if a direct HTML fetch is not enough, the runtime can use Playwright on the article page to wait for rendering and try simple interactions such as expanding the abstract
-- scanned/image-only PDFs are not OCR-processed yet
+- scanned/image-only PDFs require OCRmyPDF/Tesseract and `paper-ops ocr` or `--ocr`
+- semantic retrieval requires embeddings via `paper-ops embed` or `--embed`; BM25 remains the default fallback
 - `summarize`, `digest`, and `ask` require Gemini CLI by default unless you override `PAPER_OPS_SUMMARY_CLI`
 
 ## Validation
@@ -323,7 +366,7 @@ npm run search:smoke
 
 ## Notes
 
-- The dependency installation step is mandatory. Without `npm install`, the repo has no `playwright` package; without `npx playwright install chromium`, browser-driven sources will fail.
+- The dependency installation step is mandatory. Without `npm install`, the repo has no `playwright`, `pdf-parse`, or `better-sqlite3`; without `npx playwright install chromium`, browser-driven sources will fail.
 - Scopus, IEEE, and Web of Science now default to official API-backed retrieval when local keys are available.
    IEEE Xplore API: https://developer.ieee.org/docs
    Elsevier Research Products APIs : https://dev.elsevier.com/

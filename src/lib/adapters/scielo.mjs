@@ -207,7 +207,7 @@ export async function runScieloSearch({ query, sourceConfig, fixtureDir, retriev
           [sourceConfig.limit_param ?? 'count']: limit,
           ...(sourceConfig.collection ? { collection: sourceConfig.collection } : {}),
         }),
-        { sourceLabel: 'SciELO API' },
+        { sourceLabel: 'SciELO API', defaultHeaders: false },
       );
       const docs = extractScieloPayloadRecords(payload);
       return completedSourceResult(

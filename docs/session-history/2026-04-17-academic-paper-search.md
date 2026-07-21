@@ -777,3 +777,101 @@ The source catalog was expanded after the user requested explicit support for Sc
 
 - SciELO uses `https://search.scielo.org/?format=json` by default and can still run in live browser mode if configured that way.
 - Web of Science depends on the user's Clarivate API subscription and may require tuning `sources.web_of_science.api_url` in `config/sources.yml` if the account uses a different endpoint.
+
+## Local SQLite RAG Database
+
+The project was expanded from PDF/abstract question answering into a local, reusable RAG workspace for academic writing.
+
+### Goal
+
+After downloading or extracting article text, the user should be able to:
+
+1. ask questions against the saved corpus
+2. retrieve exact evidence chunks with page/source metadata
+3. export references for writing
+4. generate literature matrices and sourced draft sections
+
+### Implementation decisions
+
+1. Added `better-sqlite3` as the local database dependency.
+2. Added `data/paper-ops.sqlite` as the default operational database path and ignored `data/*.sqlite*`.
+3. Added idempotent schema creation for:
+   - `search_runs`
+   - `articles`
+   - `documents`
+   - `chunks`
+   - `chunk_fts`
+   - `answers`
+   - `answer_evidence`
+   - `references`
+   - `embeddings`
+4. Kept embeddings as a future extension; current retrieval uses local SQLite FTS5/BM25.
+5. Added RAG commands:
+   - `paper-ops db init`
+   - `paper-ops index <query>`
+   - `paper-ops ask <query> --question <question>`
+   - `paper-ops evidence <query> --question <question>`
+   - `paper-ops references <query>`
+   - `paper-ops matrix <query>`
+   - `paper-ops draft <query> --section <section> --question <focus>`
+6. Changed public `ask` behavior to create/use the local RAG index instead of selecting chunks directly from all article text by token overlap.
+7. Added citation verification so unsupported quotes are replaced with exact chunk text and marked as unverified.
+
+### Verification evidence
+
+The feature was implemented test-first. New coverage includes:
+
+- SQLite schema idempotence
+- query indexing into page-aware chunks and FTS
+- FTS retrieval with article/page/DOI metadata
+- RAG answer persistence and evidence verification
+- ABNT and BibTeX export
+- CLI routing for local RAG commands
+
+Observed verification:
+
+```bash
+npm test
+```
+
+Result:
+
+- 36 tests passed, 0 failed
+
+## OCR and Semantic Retrieval Plan
+
+The next architecture priority is to improve corpus coverage and retrieval quality.
+
+### Planning decisions
+
+1. OCR should be added as an optional text acquisition stage before RAG indexing.
+2. The first OCR engine should be an `ocrmypdf` CLI adapter because Tesseract-based PDF OCR is more reliable when the PDF must keep page structure.
+3. OCR artifacts should be written separately under `output/ocr-pdfs/*` and `output/ocr-text/*` so existing PDFs and extracted text are not overwritten.
+4. Semantic retrieval should be added beside the existing SQLite FTS/BM25 path, not as a replacement.
+5. The first semantic implementation should store vectors in SQLite and compute cosine/dot similarity in JavaScript, then add optional vector-index acceleration only if performance requires it.
+6. Hybrid retrieval should combine BM25 and semantic ranks with reciprocal rank fusion so exact keyword matches and paraphrase matches both survive.
+
+### Plan artifact
+
+- `docs/superpowers/plans/2026-07-21-ocr-semantic-retrieval.md`
+
+### Implementation outcome
+
+The plan was implemented as a V1 extension to the local RAG system.
+
+1. Added OCR schema and workflow support:
+   - `ocr_runs`
+   - `embedding_runs`
+   - extended `embeddings` metadata
+   - `output/ocr-pdfs/*`
+   - `output/ocr-text/*`
+2. Added `paper-ops ocr <query>` and `paper-ops index <query> --ocr`.
+3. Added an OCRmyPDF adapter with test fakes so the normal test suite does not require a local OCR binary.
+4. Added embedding providers:
+   - deterministic `fixture` provider for tests
+   - OpenAI-compatible provider for real semantic retrieval
+5. Added `paper-ops embed <query>`.
+6. Added semantic retrieval over stored chunk embeddings.
+7. Added hybrid retrieval using BM25 plus semantic reciprocal rank fusion.
+8. Added `--retrieval bm25|semantic|hybrid`, `--embed`, and `--refresh-embeddings` for `ask` and `evidence`.
+9. Added retrieval quality metrics for precision@k, recall@k, and MRR.
