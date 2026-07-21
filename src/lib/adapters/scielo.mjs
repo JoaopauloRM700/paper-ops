@@ -125,8 +125,9 @@ export async function extractScieloResultsFromPage(page, { query, limit, retriev
 }
 
 export function extractScieloResultsFromHtml(html, { query, limit, retrievedAt, baseUrl = DEFAULT_SCIELO_URL }) {
-  const articleBlocks = extractBlocks(html, /<article\b[^>]*(?:class="[^"]*(?:item|result|search-result|result-item)[^"]*"|data-scielo-id="[^"]*")[\s\S]*?<\/article>/gi);
-  const fallbackBlocks = articleBlocks.length > 0 ? articleBlocks : extractBlocks(html, /<(?:div|li)\b[^>]*(?:class="[^"]*(?:item|result|search-result|result-item)[^"]*"|data-scielo-id="[^"]*")[\s\S]*?<\/(?:div|li)>/gi);
+  const articleBlocks = extractBlocks(html, /<article\b[^>]*>[\s\S]*?<\/article>/gi);
+  const itemBlocks = extractBlocks(html, /<div\b[^>]*class="[^"]*item[^"]*"[^>]*>[\s\S]*?<\/div>[\s\S]*?<\/div>/gi);
+  const fallbackBlocks = articleBlocks.length > 0 ? articleBlocks : itemBlocks;
 
   return fallbackBlocks
     .slice(0, limit)

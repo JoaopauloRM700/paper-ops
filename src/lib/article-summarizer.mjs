@@ -155,6 +155,14 @@ function normalizeQuestionAnswer(payload) {
   return {
     answer: normalizeText(payload?.answer) || 'I could not answer from the available paper text.',
     confidence: normalizeText(payload?.confidence) || 'low',
+    citations: Array.isArray(payload?.citations)
+      ? payload.citations.map((entry) => ({
+          title: normalizeText(entry?.title) || 'unknown',
+          page: normalizeText(entry?.page) || 'unknown',
+          source: normalizeText(entry?.source) || 'unknown',
+          doi: normalizeText(entry?.doi) || 'unknown',
+        }))
+      : [],
     supporting_evidence: evidence,
     limitations: normalizeList(payload?.limitations),
   };
@@ -513,6 +521,25 @@ export async function answerQuestionFromArticleTexts(input, legacyQuestion, lega
     await runCliJsonPrompt(buildQuestionPrompt({
       question: normalizedQuestion,
       evidenceChunks: selectedEvidenceChunks,
+      profile,
+    }), runner),
+  );
+}
+
+export async function answerQuestionFromEvidenceChunks({ question, evidenceChunks, runner, profile } = {}) {
+  const normalizedQuestion = normalizeText(question);
+  if (!normalizedQuestion) {
+    throw new Error('A question is required.');
+  }
+
+  if (!Array.isArray(evidenceChunks) || evidenceChunks.length === 0) {
+    throw new Error('No evidence chunks were provided.');
+  }
+
+  return normalizeQuestionAnswer(
+    await runCliJsonPrompt(buildQuestionPrompt({
+      question: normalizedQuestion,
+      evidenceChunks,
       profile,
     }), runner),
   );

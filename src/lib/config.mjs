@@ -35,6 +35,7 @@ export function loadSourcesConfig(rawConfig = {}, options = {}) {
   const defaults = {
     per_source_limit: 10,
     fixture_mode: false,
+    pdf_parser: 'auto',
     ...(rawConfig.defaults ?? {}),
   };
 

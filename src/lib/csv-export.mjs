@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { join } from 'node:path';
 
 import { deduplicatePaperRecords } from './papers.mjs';
+import { resolveWorkspacePaths } from './workspace.mjs';
 
 function normalizeQuery(query) {
   return String(query ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -61,7 +62,7 @@ function buildCsvContent(records) {
 }
 
 export function readSavedSearchExports(projectRoot) {
-  const outputDir = join(projectRoot, 'output');
+  const outputDir = resolveWorkspacePaths(projectRoot).searchRunsOutputDir;
   if (!existsSync(outputDir)) {
     return [];
   }
@@ -108,9 +109,9 @@ export function exportQueryResultsToCsv({ projectRoot, query, outputPath } = {})
 
   const rawRecords = matchingExports.flatMap((entry) => entry.records);
   const deduped = deduplicatePaperRecords(rawRecords);
-  const finalOutputPath = outputPath ?? join(projectRoot, 'output', `search-results-${slugify(query) || 'query'}.csv`);
+  const finalOutputPath = outputPath ?? join(resolveWorkspacePaths(projectRoot).outputDir, `search-results-${slugify(query) || 'query'}.csv`);
 
-  mkdirSync(join(projectRoot, 'output'), { recursive: true });
+  mkdirSync(resolveWorkspacePaths(projectRoot).outputDir, { recursive: true });
   writeFileSync(finalOutputPath, buildCsvContent(deduped.uniqueRecords), 'utf8');
 
   return {

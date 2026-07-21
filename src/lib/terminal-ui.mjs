@@ -287,6 +287,39 @@ export function renderQuestionAnswerSummary(result) {
   return sections.join('\n');
 }
 
+export function renderWorkspaceInitSummary(result) {
+  return [
+    'paper-ops workspace init complete',
+    '',
+    `Workspace: ${result.slug}`,
+    `Root: ${result.root}`,
+    `Brief: ${result.briefPath}`,
+  ].join('\n');
+}
+
+export function renderWorkspaceCorpusSummary(modeName, result) {
+  const sections = [
+    `paper-ops ${modeName} complete`,
+    '',
+    `Workspace: ${result.workspace.root}`,
+    `Query: ${result.query}`,
+    `Articles considered: ${result.summary.totalArticles}`,
+    `Articles ingested: ${result.summary.ingestedArticles}`,
+    `Chunk count: ${result.summary.chunkCount}`,
+    `OpenDataLoader parses: ${result.summary.parsers.opendataloader}`,
+    `pdf-parse parses: ${result.summary.parsers.pdfParse}`,
+    `Abstract fallbacks: ${result.summary.parsers.abstract}`,
+    '',
+    'Artifacts',
+    `Manifest: ${result.artifacts.manifest}`,
+    `Chunks: ${result.artifacts.chunks}`,
+    `Markdown directory: ${result.artifacts.articleMarkdownDirectory}`,
+    `Structured directory: ${result.artifacts.articleStructuredDirectory}`,
+  ];
+
+  return sections.join('\n');
+}
+
 export function renderSearchCollectionSummary(modeName, results) {
   if (results.length === 0) {
     return `paper-ops ${modeName}\n\nNo searches were processed.`;

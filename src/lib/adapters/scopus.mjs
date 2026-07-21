@@ -150,7 +150,7 @@ export async function runScopusSearch({ query, sourceConfig, fixtureDir, retriev
       const payload = await fetchJson(
         fetchImpl,
         buildSearchUrl(sourceConfig.api_url ?? DEFAULT_SCOPUS_API_URL, 'query', query, {
-          count: limit,
+          count: Math.min(limit, 25),
         }),
         {
           headers: {

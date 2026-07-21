@@ -40,7 +40,12 @@ export function buildSearchUrl(baseUrl, queryParam, query, extraParams = {}) {
 }
 
 export async function fetchJson(fetchImpl, url, { headers = {}, sourceLabel = 'API' } = {}) {
-  const response = await fetchImpl(url, { headers });
+  const response = await fetchImpl(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      ...headers,
+    },
+  });
   if (!response.ok) {
     const body = typeof response.text === 'function' ? await response.text() : '';
     throw new Error(`${sourceLabel} request failed with HTTP ${response.status}${body ? `: ${body.slice(0, 200)}` : ''}`);

@@ -1,6 +1,6 @@
 {
   "defaults": {
-    "per_source_limit": 20,
+    "per_source_limit": 100,
     "fixture_mode": false,
     "browser_headless": true,
     "browser_navigation_timeout_ms": 30000,
@@ -38,9 +38,7 @@
     },
     "scielo": {
       "enabled": true,
-      "mode": "api",
-      "requires_api_key": false,
-      "api_url": "https://search.scielo.org/",
+      "mode": "live",
       "search_url": "https://search.scielo.org/",
       "fixture": "scielo.json"
     },

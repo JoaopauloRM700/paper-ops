@@ -6,8 +6,10 @@ import { fileURLToPath } from 'node:url';
 import { processBatchQueries } from './src/lib/batch.mjs';
 import {
   answerQueryFromArticles,
+  answerWorkspaceQuestion,
   digestQueryArticles,
   fetchQueryPdfs,
+  ingestWorkspaceCorpus,
   summarizeQueryArticles,
 } from './src/lib/article-digest.mjs';
 import { routeCliInput, renderHelpMenu } from './src/lib/cli.mjs';
@@ -17,6 +19,7 @@ import { processQueuedSearches } from './src/lib/pipeline.mjs';
 import { resolveQueryInput } from './src/lib/research-profile.mjs';
 import { runSearchAndPersist } from './src/lib/search-runner.mjs';
 import { readSearchHistory } from './src/lib/tracker.mjs';
+import { initializeWorkspace } from './src/lib/workspace.mjs';
 import {
   renderCsvExportSummary,
   renderPdfFetchSummary,
@@ -25,6 +28,8 @@ import {
   renderSearchCollectionSummary,
   renderSearchHistorySummary,
   renderSearchRunSummary,
+  renderWorkspaceCorpusSummary,
+  renderWorkspaceInitSummary,
 } from './src/lib/terminal-ui.mjs';
 
 export async function main(argv = process.argv.slice(2), io = {}) {
@@ -32,12 +37,12 @@ export async function main(argv = process.argv.slice(2), io = {}) {
   const routed = routeCliInput(argv);
   const projectRoot = resolve(routed.flags.projectRoot || process.cwd());
 
-  if (routed.mode === 'help' || (!routed.query && (routed.mode === 'search' || routed.mode === 'csv'))) {
+  if (routed.mode === 'help' || (!routed.query && (routed.mode === 'search' || routed.mode === 'csv' || routed.mode === 'workspace-init'))) {
     stdout(renderHelpMenu());
     return { mode: 'help' };
   }
 
-  if (!routed.query && ['fetch-pdfs', 'summarize', 'digest', 'ask'].includes(routed.mode)) {
+  if (!routed.query && ['fetch-pdfs', 'summarize', 'digest', 'ask', 'ingest'].includes(routed.mode)) {
     stdout(renderHelpMenu());
     return { mode: 'help' };
   }
@@ -68,11 +73,12 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     case 'search': {
       const config = loadConfiguredSources();
       const resolved = resolveQueryInput(routed.query, projectRoot);
+      const targetRoot = resolved.workspace?.root ?? projectRoot;
       const result = await runSearchAndPersist({
         query: resolved.query,
         profile: resolved.profile,
         config,
-        projectRoot,
+        projectRoot: targetRoot,
         fixtureDir,
       });
       stdout(renderSearchRunSummary(result));
@@ -90,8 +96,9 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     }
     case 'csv': {
       const resolved = resolveQueryInput(routed.query, projectRoot);
+      const targetRoot = resolved.workspace?.root ?? projectRoot;
       const result = exportQueryResultsToCsv({
-        projectRoot,
+        projectRoot: targetRoot,
         query: resolved.query,
       });
       stdout(renderCsvExportSummary(result));
@@ -99,17 +106,21 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     }
     case 'fetch-pdfs': {
       const resolved = resolveQueryInput(routed.query, projectRoot);
+      const targetRoot = resolved.workspace?.root ?? projectRoot;
       const result = await fetchQueryPdfs({
-        projectRoot,
+        projectRoot: targetRoot,
         query: resolved.query,
+        targetDir: routed.flags.outputDir,
+        useTitleAsFilename: routed.flags.useTitle,
       });
       stdout(renderPdfFetchSummary(result));
       return result;
     }
     case 'summarize': {
       const resolved = resolveQueryInput(routed.query, projectRoot);
+      const targetRoot = resolved.workspace?.root ?? projectRoot;
       const result = await summarizeQueryArticles({
-        projectRoot,
+        projectRoot: targetRoot,
         query: resolved.query,
         refreshText: routed.flags.refreshText,
       });
@@ -118,23 +129,48 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     }
     case 'digest': {
       const resolved = resolveQueryInput(routed.query, projectRoot);
+      const targetRoot = resolved.workspace?.root ?? projectRoot;
       const result = await digestQueryArticles({
-        projectRoot,
+        projectRoot: targetRoot,
         query: resolved.query,
         refreshText: routed.flags.refreshText,
       });
       stdout(renderArticleSummaryWorkflowSummary('digest', result));
       return result;
     }
+    case 'ingest': {
+      const resolved = resolveQueryInput(routed.query, projectRoot);
+      const targetRoot = resolved.workspace?.root ?? projectRoot;
+      const result = await ingestWorkspaceCorpus({
+        workspaceRoot: targetRoot,
+        query: resolved.query,
+        refreshCorpus: routed.flags.refreshCorpus,
+      });
+      stdout(renderWorkspaceCorpusSummary('ingest', result));
+      return result;
+    }
     case 'ask': {
       const resolved = resolveQueryInput(routed.query, projectRoot);
-      const result = await answerQueryFromArticles({
-        projectRoot,
-        query: resolved.query,
-        question: routed.flags.question,
-        refreshText: routed.flags.refreshText,
-      });
+      const targetRoot = resolved.workspace?.root ?? projectRoot;
+      const result = resolved.workspace
+        ? await answerWorkspaceQuestion({
+            workspaceRoot: targetRoot,
+            query: resolved.query,
+            question: routed.flags.question,
+            refreshCorpus: routed.flags.refreshCorpus,
+          })
+        : await answerQueryFromArticles({
+            projectRoot: targetRoot,
+            query: resolved.query,
+            question: routed.flags.question,
+            refreshText: routed.flags.refreshText,
+          });
       stdout(renderQuestionAnswerSummary(result));
+      return result;
+    }
+    case 'workspace-init': {
+      const result = initializeWorkspace(projectRoot, routed.query);
+      stdout(renderWorkspaceInitSummary(result));
       return result;
     }
     case 'tracker':

@@ -1,5 +1,5 @@
-import { readFileSync, existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, existsSync, statSync } from 'node:fs';
+import { basename, join, resolve } from 'node:path';
 
 /**
  * Parses a Research Profile Markdown file.
@@ -38,6 +38,11 @@ export function parseResearchProfile(filePath) {
  * Prioritizes 'Palavras-chave' section.
  */
 export function generateQueryFromProfile(sections) {
+  const explicitSearchStrings = sections['String de busca'] ?? sections['Search String'] ?? [];
+  if (explicitSearchStrings.length > 0) {
+    return explicitSearchStrings.join(' ').trim();
+  }
+
   const keywordLines = sections['Palavras-chave'] || [];
   if (keywordLines.length === 0) {
     // Fallback to Projeto/Pesquisa if no keywords
@@ -67,9 +72,34 @@ export function generateQueryFromProfile(sections) {
  * Resolves the input to either a raw query or a profile-based query.
  */
 export function resolveQueryInput(input, projectRoot) {
-  if (input.toLowerCase().endsWith('.md')) {
-    const fullPath = resolve(projectRoot, input);
-    if (existsSync(fullPath)) {
+  const normalizedInput = String(input ?? '').trim();
+  const fullPath = resolve(projectRoot, normalizedInput);
+
+  if (existsSync(fullPath)) {
+    const stat = statSync(fullPath);
+
+    if (stat.isDirectory()) {
+      const briefPath = join(fullPath, 'brief.md');
+      if (existsSync(briefPath)) {
+        const profile = parseResearchProfile(briefPath);
+        if (profile) {
+          return {
+            query: generateQueryFromProfile(profile),
+            profile,
+            isProfile: true,
+            isWorkspace: true,
+            profilePath: briefPath,
+            workspace: {
+              id: basename(fullPath),
+              root: fullPath,
+              briefPath,
+            },
+          };
+        }
+      }
+    }
+
+    if (normalizedInput.toLowerCase().endsWith('.md')) {
       const profile = parseResearchProfile(fullPath);
       if (profile) {
         const generatedQuery = generateQueryFromProfile(profile);
@@ -77,15 +107,19 @@ export function resolveQueryInput(input, projectRoot) {
           query: generatedQuery,
           profile,
           isProfile: true,
-          profilePath: input
+          isWorkspace: false,
+          profilePath: input,
+          workspace: null,
         };
       }
     }
   }
 
   return {
-    query: input,
+    query: normalizedInput,
     profile: null,
-    isProfile: false
+    isProfile: false,
+    isWorkspace: false,
+    workspace: null,
   };
 }

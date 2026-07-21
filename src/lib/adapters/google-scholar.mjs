@@ -166,7 +166,8 @@ export async function extractPaginatedGoogleScholarResultsFromPage(page, {
 }
 
 export function extractGoogleScholarResultsFromHtml(html, { query, limit, retrievedAt, baseUrl = DEFAULT_SCHOLAR_URL }) {
-  return extractBlocks(html, /<div\b[^>]*class="[^"]*gs_r[^"]*gs_or[^"]*gs_scl[^"]*"[\s\S]*?<\/div>\s*<\/div>/gi)
+  const blockPattern = /<div\b[^>]*class="[^"]*gs_r[^"]*gs_or[^"]*gs_scl[^"]*"[\s\S]*?(?=<div\b[^>]*class="[^"]*gs_r[^"]*gs_or[^"]*gs_scl[^"]*"|<div\b[^>]*id="gs_res_ccl_bot"|$)/gi;
+  return extractBlocks(html, blockPattern)
     .slice(0, limit)
     .map((block) => {
       const url = extractHref(block, [

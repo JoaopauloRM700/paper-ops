@@ -4,6 +4,7 @@ import { dirname, join, relative } from 'node:path';
 import { runSourceSearch } from './adapters/index.mjs';
 import { createPlaywrightBrowserRuntime } from './browser-runtime.mjs';
 import { deduplicatePaperRecords } from './papers.mjs';
+import { ensureWorkspaceArtifactDirs, resolveWorkspacePaths } from './workspace.mjs';
 
 function slugify(input) {
   return String(input)
@@ -14,9 +15,7 @@ function slugify(input) {
 }
 
 function ensureProjectDirs(projectRoot) {
-  for (const directory of ['data', 'reports', 'output']) {
-    mkdirSync(join(projectRoot, directory), { recursive: true });
-  }
+  ensureWorkspaceArtifactDirs(projectRoot);
 }
 
 function buildRunId(query, now, artifactSuffix = '') {
@@ -77,7 +76,7 @@ function renderMarkdownReport({ query, now, summary, records, profile }) {
 }
 
 function ensureHistoryIndex(projectRoot) {
-  const historyPath = join(projectRoot, 'data', 'search-history.md');
+  const historyPath = resolveWorkspacePaths(projectRoot).searchHistoryPath;
   if (!existsSync(historyPath)) {
     writeFileSync(
       historyPath,
@@ -187,6 +186,7 @@ export async function runSearchAndPersist({
   profile = null,
 }) {
   ensureProjectDirs(projectRoot);
+  const workspacePaths = resolveWorkspacePaths(projectRoot);
   
   // If we have a profile, we might want a better slug for the runId than the long generated query
   const slugBase = profile && profile['Projeto/Pesquisa'] && profile['Projeto/Pesquisa'][0] 
@@ -205,10 +205,8 @@ export async function runSearchAndPersist({
     browserFactory,
   });
 
-  const markdownRelativePath = join('reports', `${runId}.md`);
-  const jsonRelativePath = join('output', `${runId}.json`);
-  const markdownPath = join(projectRoot, markdownRelativePath);
-  const jsonPath = join(projectRoot, jsonRelativePath);
+  const markdownPath = join(workspacePaths.searchRunsReportDir, `${runId}.md`);
+  const jsonPath = join(workspacePaths.searchRunsOutputDir, `${runId}.json`);
   const historyPath = ensureHistoryIndex(projectRoot);
 
   writeFileSync(

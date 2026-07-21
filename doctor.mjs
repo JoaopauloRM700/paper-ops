@@ -158,6 +158,40 @@ async function checkPdfParsingRuntime() {
   }
 }
 
+function checkJavaRuntime() {
+  if (commandExists('java')) {
+    return createCheck(true, 'Java runtime available for OpenDataLoader PDF');
+  }
+
+  return {
+    level: 'warn',
+    label: 'Java runtime not found in PATH',
+    hint: 'OpenDataLoader PDF will be skipped and the runtime will fall back to pdf-parse until Java 11+ is installed.',
+  };
+}
+
+async function checkOpenDataLoaderRuntime() {
+  try {
+    await import('@opendataloader/pdf');
+  } catch {
+    return {
+      level: 'warn',
+      label: 'OpenDataLoader PDF runtime not available',
+      hint: 'Run `npm install @opendataloader/pdf` to enable the preferred workspace corpus parser.',
+    };
+  }
+
+  if (!commandExists('java')) {
+    return {
+      level: 'warn',
+      label: 'OpenDataLoader PDF installed but Java runtime is missing',
+      hint: 'Install Java 11+ to activate OpenDataLoader parsing; until then the runtime will fall back to pdf-parse.',
+    };
+  }
+
+  return createCheck(true, 'OpenDataLoader PDF runtime available');
+}
+
 function checkBatchAssets() {
   const required = [
     join(projectRoot, 'batch', 'README.md'),
@@ -210,6 +244,8 @@ export async function getDoctorChecks() {
     checkApiCredentials(),
     await checkPlaywrightRuntime(),
     await checkPdfParsingRuntime(),
+    checkJavaRuntime(),
+    await checkOpenDataLoaderRuntime(),
     checkProjectDir('data'),
     checkProjectDir('reports'),
     checkProjectDir('output'),
