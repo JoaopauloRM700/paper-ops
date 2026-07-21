@@ -5,7 +5,6 @@ import { fileURLToPath } from 'node:url';
 
 import { processBatchQueries } from './src/lib/batch.mjs';
 import {
-  answerQueryFromArticles,
   digestQueryArticles,
   fetchQueryPdfs,
   summarizeQueryArticles,
@@ -13,15 +12,32 @@ import {
 import { routeCliInput, renderHelpMenu } from './src/lib/cli.mjs';
 import { readSourcesConfig } from './src/lib/config.mjs';
 import { exportQueryResultsToCsv } from './src/lib/csv-export.mjs';
+import { openPaperOpsDatabase } from './src/lib/db/database.mjs';
+import { initializePaperOpsSchema } from './src/lib/db/schema.mjs';
+import { ocrQueryPdfs } from './src/lib/ocr/workflow.mjs';
 import { processQueuedSearches } from './src/lib/pipeline.mjs';
+import { answerQueryWithRag } from './src/lib/rag/answerer.mjs';
+import { embedQueryChunks } from './src/lib/rag/embeddings/indexer.mjs';
+import { collectEvidenceForQuestion } from './src/lib/rag/evidence.mjs';
+import { indexQueryForRag } from './src/lib/rag/indexer.mjs';
+import { exportReferencesForQuery } from './src/lib/rag/references.mjs';
+import { buildLiteratureMatrix, draftSectionFromEvidence } from './src/lib/rag/writing-tools.mjs';
 import { resolveQueryInput } from './src/lib/research-profile.mjs';
 import { runSearchAndPersist } from './src/lib/search-runner.mjs';
 import { readSearchHistory } from './src/lib/tracker.mjs';
 import {
+  renderDbInitSummary,
   renderCsvExportSummary,
+  renderDraftSummary,
+  renderEmbeddingSummary,
+  renderEvidenceSummary,
+  renderMatrixSummary,
+  renderOcrSummary,
   renderPdfFetchSummary,
   renderArticleSummaryWorkflowSummary,
-  renderQuestionAnswerSummary,
+  renderRagAnswerSummary,
+  renderRagIndexSummary,
+  renderReferencesSummary,
   renderSearchCollectionSummary,
   renderSearchHistorySummary,
   renderSearchRunSummary,
@@ -37,12 +53,12 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     return { mode: 'help' };
   }
 
-  if (!routed.query && ['fetch-pdfs', 'summarize', 'digest', 'ask'].includes(routed.mode)) {
+  if (!routed.query && ['fetch-pdfs', 'summarize', 'digest', 'ask', 'ocr', 'embed', 'index', 'evidence', 'references', 'matrix', 'draft'].includes(routed.mode)) {
     stdout(renderHelpMenu());
     return { mode: 'help' };
   }
 
-  if (routed.mode === 'ask' && !routed.flags.question) {
+  if (['ask', 'evidence', 'draft'].includes(routed.mode) && !routed.flags.question) {
     stdout(renderHelpMenu());
     return { mode: 'help' };
   }
@@ -128,13 +144,138 @@ export async function main(argv = process.argv.slice(2), io = {}) {
     }
     case 'ask': {
       const resolved = resolveQueryInput(routed.query, projectRoot);
-      const result = await answerQueryFromArticles({
+      const result = await answerQueryWithRag({
         projectRoot,
         query: resolved.query,
         question: routed.flags.question,
+        retrieval: routed.flags.retrieval || 'bm25',
         refreshText: routed.flags.refreshText,
+        refreshIndex: routed.flags.refreshIndex,
+        ocr: routed.flags.ocr,
+        ocrLanguage: routed.flags.ocrLang || process.env.PAPER_OPS_OCR_LANG || 'eng',
+        embed: routed.flags.embed,
+        refreshEmbeddings: routed.flags.refreshEmbeddings,
+        embeddingProviderName: routed.flags.embeddingProvider || process.env.PAPER_OPS_EMBEDDING_PROVIDER || 'fixture',
+        embeddingModel: routed.flags.embeddingModel || process.env.PAPER_OPS_EMBEDDING_MODEL,
+        topK: Number.isFinite(routed.flags.topK) ? routed.flags.topK : 12,
       });
-      stdout(renderQuestionAnswerSummary(result));
+      stdout(renderRagAnswerSummary(result));
+      return result;
+    }
+    case 'ocr': {
+      const resolved = resolveQueryInput(routed.query, projectRoot);
+      const result = await ocrQueryPdfs({
+        projectRoot,
+        query: resolved.query,
+        language: routed.flags.ocrLang || process.env.PAPER_OPS_OCR_LANG || 'eng',
+        force: routed.flags.force,
+      });
+      stdout(renderOcrSummary(result));
+      return result;
+    }
+    case 'embed': {
+      const resolved = resolveQueryInput(routed.query, projectRoot);
+      await indexQueryForRag({
+        projectRoot,
+        query: resolved.query,
+        refreshIndex: routed.flags.refreshIndex,
+        ocr: routed.flags.ocr,
+        ocrLanguage: routed.flags.ocrLang || process.env.PAPER_OPS_OCR_LANG || 'eng',
+      });
+      const result = await embedQueryChunks({
+        projectRoot,
+        query: resolved.query,
+        provider: routed.flags.embeddingProvider || process.env.PAPER_OPS_EMBEDDING_PROVIDER || 'fixture',
+        model: routed.flags.embeddingModel || process.env.PAPER_OPS_EMBEDDING_MODEL,
+        refreshEmbeddings: routed.flags.refreshEmbeddings,
+      });
+      stdout(renderEmbeddingSummary(result));
+      return result;
+    }
+    case 'db': {
+      if (routed.query !== 'init') {
+        stdout(renderHelpMenu());
+        return { mode: 'help' };
+      }
+
+      const db = openPaperOpsDatabase({ projectRoot });
+      initializePaperOpsSchema(db);
+      const databasePath = db.name;
+      db.close();
+      const result = { databasePath };
+      stdout(renderDbInitSummary(result));
+      return result;
+    }
+    case 'index': {
+      const resolved = resolveQueryInput(routed.query, projectRoot);
+      const result = await indexQueryForRag({
+        projectRoot,
+        query: resolved.query,
+        refreshText: routed.flags.refreshText,
+        refreshIndex: routed.flags.refreshIndex,
+        ocr: routed.flags.ocr,
+        ocrLanguage: routed.flags.ocrLang || process.env.PAPER_OPS_OCR_LANG || 'eng',
+        embed: routed.flags.embed,
+        refreshEmbeddings: routed.flags.refreshEmbeddings,
+        embeddingProviderName: routed.flags.embeddingProvider || process.env.PAPER_OPS_EMBEDDING_PROVIDER || 'fixture',
+        embeddingModel: routed.flags.embeddingModel || process.env.PAPER_OPS_EMBEDDING_MODEL,
+      });
+      stdout(renderRagIndexSummary(result));
+      return result;
+    }
+    case 'evidence': {
+      const resolved = resolveQueryInput(routed.query, projectRoot);
+      const result = await collectEvidenceForQuestion({
+        projectRoot,
+        query: resolved.query,
+        question: routed.flags.question,
+        retrieval: routed.flags.retrieval || 'bm25',
+        topK: Number.isFinite(routed.flags.topK) ? routed.flags.topK : 20,
+        refreshIndex: routed.flags.refreshIndex,
+        ocr: routed.flags.ocr,
+        ocrLanguage: routed.flags.ocrLang || process.env.PAPER_OPS_OCR_LANG || 'eng',
+        embed: routed.flags.embed,
+        refreshEmbeddings: routed.flags.refreshEmbeddings,
+        embeddingProviderName: routed.flags.embeddingProvider || process.env.PAPER_OPS_EMBEDDING_PROVIDER || 'fixture',
+        embeddingModel: routed.flags.embeddingModel || process.env.PAPER_OPS_EMBEDDING_MODEL,
+      });
+      stdout(renderEvidenceSummary(result));
+      return result;
+    }
+    case 'references': {
+      const resolved = resolveQueryInput(routed.query, projectRoot);
+      await indexQueryForRag({
+        projectRoot,
+        query: resolved.query,
+        refreshIndex: routed.flags.refreshIndex,
+      });
+      const result = exportReferencesForQuery({
+        projectRoot,
+        query: resolved.query,
+        format: routed.flags.format || 'all',
+      });
+      stdout(renderReferencesSummary(result));
+      return result;
+    }
+    case 'matrix': {
+      const resolved = resolveQueryInput(routed.query, projectRoot);
+      const result = await buildLiteratureMatrix({
+        projectRoot,
+        query: resolved.query,
+      });
+      stdout(renderMatrixSummary(result));
+      return result;
+    }
+    case 'draft': {
+      const resolved = resolveQueryInput(routed.query, projectRoot);
+      const result = await draftSectionFromEvidence({
+        projectRoot,
+        query: resolved.query,
+        question: routed.flags.question,
+        section: routed.flags.section || 'custom',
+        topK: Number.isFinite(routed.flags.topK) ? routed.flags.topK : 12,
+      });
+      stdout(renderDraftSummary(result));
       return result;
     }
     case 'tracker':

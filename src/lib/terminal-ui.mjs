@@ -287,6 +287,214 @@ export function renderQuestionAnswerSummary(result) {
   return sections.join('\n');
 }
 
+export function renderDbInitSummary(result) {
+  return [
+    'paper-ops db init complete',
+    '',
+    `Database: ${result.databasePath}`,
+  ].join('\n');
+}
+
+export function renderRagIndexSummary(result) {
+  const sections = [
+    'paper-ops index complete',
+    '',
+    `Query: ${result.query}`,
+    `Articles indexed: ${result.summary.articlesIndexed}`,
+    `Articles skipped: ${result.summary.articlesSkipped}`,
+    `Text failures: ${result.summary.textFailed}`,
+    `Chunks indexed: ${result.summary.chunksIndexed}`,
+    '',
+    `Database: ${result.artifacts.databasePath}`,
+  ];
+
+  if (result.ocr) {
+    sections.splice(
+      7,
+      0,
+      `OCR succeeded: ${result.ocr.ocrSucceeded}`,
+      `OCR skipped: ${result.ocr.ocrSkipped}`,
+      `OCR failed: ${result.ocr.ocrFailed}`,
+    );
+  }
+
+  if (result.embeddings) {
+    sections.splice(
+      7,
+      0,
+      `Embedding chunks: ${result.embeddings.chunksEmbedded}`,
+      `Embedding skipped: ${result.embeddings.chunksSkipped}`,
+    );
+  }
+
+  return sections.join('\n');
+}
+
+export function renderOcrSummary(result) {
+  const rows = result.rows.slice(0, 5).map((row, index) => ({
+    index: String(index + 1),
+    status: row.status,
+    article: row.articleId,
+    error: row.error || '-',
+  }));
+
+  return [
+    'paper-ops ocr complete',
+    '',
+    `Query: ${result.query}`,
+    `Language: ${result.language}`,
+    `OCR succeeded: ${result.summary.ocrSucceeded}`,
+    `OCR skipped: ${result.summary.ocrSkipped}`,
+    `OCR failed: ${result.summary.ocrFailed}`,
+    '',
+    renderTable(
+      [
+        { key: 'index', label: '#', width: 2 },
+        { key: 'status', label: 'Status', width: 14 },
+        { key: 'article', label: 'Article', width: 34 },
+        { key: 'error', label: 'Error', width: 48 },
+      ],
+      rows.length > 0
+        ? rows
+        : [{ index: '-', status: '-', article: '-', error: 'No saved records found' }],
+    ),
+    '',
+    'Artifacts',
+    `Report: ${result.artifacts.reportMarkdown}`,
+  ].join('\n');
+}
+
+export function renderRagAnswerSummary(result) {
+  const evidenceRows = result.answer.supporting_evidence.slice(0, 5).map((entry, index) => ({
+    index: String(index + 1),
+    page: entry.pageStart || entry.page || '-',
+    verified: entry.verified ? 'yes' : 'no',
+    title: entry.title || '-',
+    quote: entry.quote || '-',
+  }));
+
+  return [
+    'paper-ops ask complete',
+    '',
+    `Query: ${result.query}`,
+    `Question: ${result.question}`,
+    `Retrieval: ${result.retrieval.mode || 'bm25'}`,
+    `Retrieved chunks: ${result.retrieval.chunksReturned}`,
+    `Confidence: ${result.answer.confidence}`,
+    '',
+    'Answer',
+    result.answer.answer,
+    '',
+    'Supporting evidence',
+    renderTable(
+      [
+        { key: 'index', label: '#', width: 2 },
+        { key: 'page', label: 'Page', width: 10 },
+        { key: 'verified', label: 'Verified', width: 8 },
+        { key: 'title', label: 'Title', width: 32 },
+        { key: 'quote', label: 'Quote', width: 56 },
+      ],
+      evidenceRows.length > 0
+        ? evidenceRows
+        : [{ index: '-', page: '-', verified: '-', title: '-', quote: 'No direct quote returned' }],
+    ),
+    '',
+    'Artifacts',
+    `Answer markdown: ${result.artifacts.answerMarkdown}`,
+    `Answer JSON: ${result.artifacts.answerJson}`,
+  ].join('\n');
+}
+
+export function renderEmbeddingSummary(result) {
+  return [
+    'paper-ops embed complete',
+    '',
+    `Query: ${result.query}`,
+    `Provider: ${result.provider}`,
+    `Model: ${result.model}`,
+    `Dimension: ${result.dimension}`,
+    `Chunks total: ${result.summary.chunksTotal}`,
+    `Chunks embedded: ${result.summary.chunksEmbedded}`,
+    `Chunks skipped: ${result.summary.chunksSkipped}`,
+    '',
+    `Database: ${result.artifacts.databasePath}`,
+  ].join('\n');
+}
+
+export function renderEvidenceSummary(result) {
+  const rows = result.evidenceChunks.slice(0, 5).map((chunk, index) => ({
+    index: String(index + 1),
+    page: chunk.pageStart || '-',
+    title: chunk.title || '-',
+    text: chunk.text || '-',
+  }));
+
+  return [
+    'paper-ops evidence complete',
+    '',
+    `Query: ${result.query}`,
+    `Question: ${result.question}`,
+    `Retrieval: ${result.retrieval?.mode || 'bm25'}`,
+    `Evidence chunks: ${result.evidenceChunks.length}`,
+    '',
+    renderTable(
+      [
+        { key: 'index', label: '#', width: 2 },
+        { key: 'page', label: 'Page', width: 10 },
+        { key: 'title', label: 'Title', width: 34 },
+        { key: 'text', label: 'Evidence', width: 70 },
+      ],
+      rows.length > 0
+        ? rows
+        : [{ index: '-', page: '-', title: '-', text: 'No evidence found' }],
+    ),
+    '',
+    'Artifacts',
+    `Evidence markdown: ${result.artifacts.evidenceMarkdown}`,
+    `Evidence JSON: ${result.artifacts.evidenceJson}`,
+  ].join('\n');
+}
+
+export function renderReferencesSummary(result) {
+  return [
+    'paper-ops references complete',
+    '',
+    `Query: ${result.query}`,
+    `References: ${result.references.length}`,
+    '',
+    'Artifacts',
+    `ABNT: ${result.artifacts.abntPath || '-'}`,
+    `BibTeX: ${result.artifacts.bibtexPath || '-'}`,
+    `APA: ${result.artifacts.apaPath || '-'}`,
+  ].join('\n');
+}
+
+export function renderMatrixSummary(result) {
+  return [
+    'paper-ops matrix complete',
+    '',
+    `Query: ${result.query}`,
+    `Rows: ${result.rows.length}`,
+    '',
+    'Artifacts',
+    `Markdown: ${result.artifacts.matrixMarkdown}`,
+    `CSV: ${result.artifacts.matrixCsv}`,
+  ].join('\n');
+}
+
+export function renderDraftSummary(result) {
+  return [
+    'paper-ops draft complete',
+    '',
+    `Query: ${result.query}`,
+    `Section: ${result.section}`,
+    `Evidence chunks: ${result.evidenceChunks.length}`,
+    '',
+    'Artifacts',
+    `Draft markdown: ${result.artifacts.draftMarkdown}`,
+  ].join('\n');
+}
+
 export function renderSearchCollectionSummary(modeName, results) {
   if (results.length === 0) {
     return `paper-ops ${modeName}\n\nNo searches were processed.`;

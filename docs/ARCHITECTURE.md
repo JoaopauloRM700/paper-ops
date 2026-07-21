@@ -15,8 +15,11 @@ query string
   -> markdown report + JSON export
   -> search history index
   -> optional PDF download + text extraction
+  -> optional OCR for scanned/image-heavy PDFs
+  -> optional local SQLite RAG indexing
+  -> SQLite FTS/BM25, semantic, or hybrid chunk retrieval for questions and evidence tables
   -> per-article structured summaries
-  -> optional cross-paper digest or question answer
+  -> optional cross-paper digest, question answer, references, matrix, or draft
 ```
 
 ## Core Modules
@@ -29,8 +32,12 @@ query string
 - `src/lib/adapters/*` -> source-specific live extraction and fixture normalization
 - `src/lib/search-runner.mjs` -> orchestration and artifact writing
 - `src/lib/pdf-extractor.mjs` -> PDF text extraction
+- `src/lib/article-texts.mjs` -> saved query resolution, PDF/text cache reuse, and abstract fallback for RAG indexing
+- `src/lib/ocr/*` -> OCRmyPDF adapter, query-level OCR workflow, and OCR artifact creation
 - `src/lib/article-summarizer.mjs` -> Gemini-driven structured article summaries, cross-paper synthesis, and question answering
 - `src/lib/article-digest.mjs` -> PDF download, PDF/abstract text selection, per-article summaries, digest orchestration, and PDF-grounded answers
+- `src/lib/db/*` -> local SQLite connection and schema management
+- `src/lib/rag/*` -> chunking, indexing, FTS retrieval, embeddings, semantic/hybrid retrieval, RAG answers, citations, references, evidence tables, matrices, and drafts
 - `src/lib/pipeline.mjs` -> queued searches
 - `src/lib/batch.mjs` -> TSV-backed batch input
 
@@ -40,8 +47,11 @@ query string
 - `output/*.json` -> structured exports
 - `data/search-history.md` -> lightweight run index
 - `data/search-queue.md` -> queued searches
+- `data/paper-ops.sqlite` -> local RAG database for articles, documents, chunks, FTS, answers, evidence, and references
 - `output/pdfs/*.pdf` -> cached PDFs for saved search results
 - `output/pdf-text/*.txt` -> extracted article text
+- `output/ocr-pdfs/*.pdf` -> OCR-processed PDF copies
+- `output/ocr-text/*.txt` -> OCR-extracted text artifacts
 - `output/article-summaries/*.json` -> structured per-article summaries
 - `output/article-summaries/*.txt` -> plain-text per-article summaries
 - `reports/article-summaries/*.md` -> human-readable per-article summaries
@@ -49,6 +59,9 @@ query string
 - `reports/digests/*.md` -> human-readable cross-paper digests
 - `output/answers/*.json` -> structured answers to research questions
 - `reports/answers/*.md` -> human-readable answers with supporting evidence
+- `output/rag/<query-id>/answers/*.json` -> RAG answers backed by indexed chunks
+- `output/rag/<query-id>/evidence/*.json` -> retrieved evidence tables
+- `reports/rag/<query-id>/**` -> RAG answer, evidence, reference, matrix, and draft reports
 
 ## Dedup Order
 
@@ -72,4 +85,10 @@ When duplicates are merged, the first retained record is enriched with any missi
   - saved abstract from the normalized `PaperRecord`
   - abstract enriched from the article landing page
 - Landing-page enrichment first tries a direct HTML fetch and then falls back to Playwright for dynamic pages, including lightweight interactions such as opening an abstract panel or dismissing cookie banners.
-- Question answering reuses the same PDF/abstract text layer and writes answer artifacts with supporting evidence.
+- `paper-ops index` creates/updates the local SQLite RAG index for one saved query.
+- `paper-ops ocr` OCRs cached/downloadable PDFs for one saved query and preserves OCR artifacts separately.
+- `paper-ops embed` creates chunk embeddings for semantic retrieval.
+- RAG indexing stores article metadata, extracted documents, page-aware chunks, references, and an FTS5 table for BM25 retrieval.
+- `paper-ops ask` creates the index on demand when needed, retrieves top evidence chunks with BM25, semantic, or hybrid retrieval, and writes verified evidence to both SQLite and artifacts.
+- `paper-ops evidence`, `references`, `matrix`, and `draft` reuse the same local database for writing workflows.
+- Embeddings are stored locally in SQLite for V1 semantic retrieval. Hybrid retrieval combines BM25 and semantic ranks with reciprocal rank fusion.

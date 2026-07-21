@@ -8,15 +8,27 @@ export function buildGeminiPrompt(argv = []) {
   const fixturesFlag = routed.flags.fixtures ? ' --fixtures' : '';
   const questionFlag = routed.flags.question ? ` --question ${JSON.stringify(routed.flags.question)}` : '';
   const refreshTextFlag = routed.flags.refreshText ? ' --refresh-text' : '';
+  const refreshIndexFlag = routed.flags.refreshIndex ? ' --refresh-index' : '';
+  const ocrFlag = routed.flags.ocr ? ' --ocr' : '';
+  const ocrLangFlag = routed.flags.ocrLang ? ` --ocr-lang ${routed.flags.ocrLang}` : '';
+  const forceFlag = routed.flags.force ? ' --force' : '';
+  const embedFlag = routed.flags.embed ? ' --embed' : '';
+  const refreshEmbeddingsFlag = routed.flags.refreshEmbeddings ? ' --refresh-embeddings' : '';
+  const retrievalFlag = routed.flags.retrieval ? ` --retrieval ${routed.flags.retrieval}` : '';
+  const embeddingProviderFlag = routed.flags.embeddingProvider ? ` --embedding-provider ${routed.flags.embeddingProvider}` : '';
+  const embeddingModelFlag = routed.flags.embeddingModel ? ` --embedding-model ${routed.flags.embeddingModel}` : '';
+  const topKFlag = Number.isFinite(routed.flags.topK) ? ` --top-k ${routed.flags.topK}` : '';
+  const formatFlag = routed.flags.format ? ` --format ${routed.flags.format}` : '';
+  const sectionFlag = routed.flags.section ? ` --section ${routed.flags.section}` : '';
 
   if (routed.mode === 'help') {
     return 'paper-ops';
   }
 
-  if (['search', 'csv', 'fetch-pdfs', 'summarize', 'digest', 'ask'].includes(routed.mode)) {
+  if (['search', 'csv', 'fetch-pdfs', 'summarize', 'digest', 'ask', 'ocr', 'embed', 'index', 'evidence', 'references', 'matrix', 'draft'].includes(routed.mode)) {
     return routed.query
-      ? `paper-ops ${routed.mode} ${JSON.stringify(routed.query)}${questionFlag}${refreshTextFlag}${fixturesFlag}`
-      : `paper-ops${questionFlag}${refreshTextFlag}${fixturesFlag}`;
+      ? `paper-ops ${routed.mode} ${JSON.stringify(routed.query)}${questionFlag}${refreshTextFlag}${refreshIndexFlag}${ocrFlag}${ocrLangFlag}${forceFlag}${embedFlag}${refreshEmbeddingsFlag}${retrievalFlag}${embeddingProviderFlag}${embeddingModelFlag}${topKFlag}${formatFlag}${sectionFlag}${fixturesFlag}`
+      : `paper-ops${questionFlag}${refreshTextFlag}${refreshIndexFlag}${ocrFlag}${ocrLangFlag}${forceFlag}${embedFlag}${refreshEmbeddingsFlag}${retrievalFlag}${embeddingProviderFlag}${embeddingModelFlag}${topKFlag}${formatFlag}${sectionFlag}${fixturesFlag}`;
   }
 
   return `paper-ops ${routed.mode}${fixturesFlag}`;
